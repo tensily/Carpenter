@@ -6,7 +6,7 @@ carpenter upgrade --bin-dir ~/.local/bin
 
 Result (one envelope on stdout):
 ```json
-{"status":"ok","message":"upgraded: 0.10.0","data":{"upgraded":true,"version":"0.10.0","bin":"/home/u/.local/bin/carpenter","source":"https://github.com/meolord29/Carpenter/releases/latest/download/carpenter-x86_64-unknown-linux-musl.tar.gz","skill":[{"refreshed":true,"app":"opencode","path":"/home/u/.config/opencode/skills/carpenter/SKILL.md"},{"refreshed":true,"app":"claude-code","path":"/home/u/.claude/skills/carpenter/SKILL.md"}]}}
+{"status":"ok","message":"upgraded: 0.10.0","data":{"upgraded":true,"version":"0.10.0","bin":"/home/u/.local/bin/carpenter","source":"https://github.com/tensily/Carpenter/releases/latest/download/carpenter-x86_64-unknown-linux-musl.tar.gz","skill":[{"refreshed":true,"app":"opencode","path":"/home/u/.config/opencode/skills/carpenter/SKILL.md"},{"refreshed":true,"app":"claude-code","path":"/home/u/.claude/skills/carpenter/SKILL.md"}]}}
 ```
 
 Fetches the latest **stable** release (checksum-verified), replaces the binary, and

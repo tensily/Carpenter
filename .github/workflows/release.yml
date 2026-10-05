@@ -271,7 +271,7 @@ jobs:
 
           Unstable by design — the README serves stable only. Install (Linux x86_64, macOS Apple Silicon):
 
-              curl -LsSf https://github.com/meolord29/Carpenter/releases/download/nightly/install.sh | sh"
+              curl -LsSf https://github.com/tensily/Carpenter/releases/download/nightly/install.sh | sh"
       - name: publish stable release
         if: steps.ch.outputs.tag != 'nightly'
         env:
@@ -285,7 +285,7 @@ jobs:
 
           Install (Linux x86_64, macOS Apple Silicon):
 
-              curl -LsSf https://github.com/meolord29/Carpenter/releases/latest/download/install.sh | sh
+              curl -LsSf https://github.com/tensily/Carpenter/releases/latest/download/install.sh | sh
 
           Rollback: install any previous vX.Y.Z release the same way, substituting its tag for \`latest\`."
 
@@ -416,9 +416,9 @@ jobs:
           if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
             CARPENTER_DOWNLOAD_BASE="file://${GITHUB_WORKSPACE}/dist" sh scripts/install.sh
           elif [ "$GITHUB_REF_NAME" = "nightly" ]; then
-            curl -LsSf https://github.com/meolord29/Carpenter/releases/download/nightly/install.sh | sh
+            curl -LsSf https://github.com/tensily/Carpenter/releases/download/nightly/install.sh | sh
           else
-            curl -LsSf https://github.com/meolord29/Carpenter/releases/latest/download/install.sh | sh
+            curl -LsSf https://github.com/tensily/Carpenter/releases/latest/download/install.sh | sh
           fi
       - name: path report (diagnostic — never fails)
         if: always()
