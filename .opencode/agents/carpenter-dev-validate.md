@@ -95,17 +95,22 @@ or make architectural assumptions without verifying your path with the user.
    or execute shell commands until the user answers.
 5. After answers, propose a short plan and confirm before executing.
 
-### For a real-course corpus — ask about CONTENT only
+### For a real-course corpus — run the intake first, then ask about CONTENT only
+
+Follow the skill's `## Learner intake` interview before scaffolding: what the
+user wants to learn and why, their background (languages, math/tools, prior
+exposure), their constraints (time, pace, lesson appetite). Propose the course
+`goal` from the answers and get sign-off **before `course create`**.
 
 The `carpenter` skill defines **THE CARPENTER WAY** — fixed: one concept per
 lesson; practice attached to its teaching section; a quiz at the end; grading is
 exact-compare, plain-Python outputs rounded to 8 decimals, deterministic cases;
 the answer key is locked with `lesson verify`. **Never ask about any of that.**
 
-Apply the dynamic questions to *content* alone — level/depth, the application
-domain, scope (lesson count), topic emphasis. Then propose the tailored outline
-(lesson list + per-lesson practice/quiz functions) and get sign-off before
-`lesson create`.
+Apply the remaining dynamic questions to *content* alone — level/depth, the
+application domain, scope (lesson count), topic emphasis. Then propose the
+tailored outline (lesson list + per-lesson practice/quiz functions) and get
+sign-off before `lesson create`.
 
 ## Hard prerequisites & boundaries
 
@@ -127,8 +132,8 @@ domain, scope (lesson count), topic emphasis. Then propose the tailored outline
 Ask the user for, in a single turn:
 
 1. **Course-project corpus**: topic + `title`/`slug`/`goal`/`description`. This
-   is the realistic data you drive the CLI with. Propose params from the topic
-   and let the user confirm/adjust.
+   is the realistic data you drive the CLI with. Propose params from the intake
+   answers and let the user confirm/adjust.
 2. **Focus (optional)**: specific new/changed commands (`<group>::<fn>`) to
    concentrate the hunt on. If none given, audit the whole surface.
 

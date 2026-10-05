@@ -1,16 +1,15 @@
 name: release
 
-# Branch-governed channels (adr/021) + automated version ladder (adr/022):
-#   push to nightly → bump job commits the patch bump (X.Y.Z+1), the run
-#                     builds the BUMPED sha and rolls the `nightly` prerelease
-#   promotion PR     → promote-bump pushes main's minor+1.0.0 onto nightly via
-#                     the release-bot GitHub App (its pushes re-run PR checks);
-#                     the patch ladder pauses while the PR is open
-#   push to main     → publish immutable stable vX.Y.Z, then recut fast-forwards
-#                     nightly to the promotion merge (adr/022)
+# Channel-governed releases (adr/021) in the standard OSS shape (adr/025):
+# versions are bumped by humans in ordinary PRs (`cargo xtask bump ...`);
+# CI never commits to a protected branch and holds no bypass credentials.
+# Channel pushes build and publish:
+#   push to nightly → roll the `nightly` rolling prerelease (short-sha title)
+#   push to main    → publish immutable stable vX.Y.Z from Cargo.toml — the
+#                     version the promotion PR carried (ci.yml's guard
+#                     enforces that it is main's minor+1)
 # PRs against nightly/main build + smoke against PR-local file:// artifacts
-# only — a PR can never publish. Only the nightly branch may merge into main
-# (ci.yml's guard job enforces that + the exact promotion version).
+# only — a PR can never publish. Only the nightly branch may merge into main.
 on:
   push:
     branches: [nightly, main]
@@ -26,87 +25,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # Patch ladder (adr/022). Runs first on every nightly push: bumps the
-  # version, regenerates every derived surface, pushes `chore(release): bump
-  # to X.Y.Z` — then build/release consume the bumped sha so the nightly
-  # artifact REPORTS the new version. The push uses GITHUB_TOKEN on purpose:
-  # token-made pushes never trigger workflows, so no cascade (the build rides
-  # this same run). No-ops (resolve sha = github.sha) on PRs and main pushes,
-  # while a promotion PR is open (ladder pause), or on an existing bump head.
-  bump:
-    name: bump (patch ladder)
-    runs-on: ubuntu-latest
-    outputs:
-      sha: ${{ steps.resolve.outputs.sha }}
-    steps:
-      - name: decide
-        id: decide
-        run: |
-          if [ "$GITHUB_EVENT_NAME" = push ] && [ "$GITHUB_REF_NAME" = nightly ]; then
-            echo "run=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "run=false" >> "$GITHUB_OUTPUT"
-          fi
-      - uses: actions/checkout@v4
-        if: steps.decide.outputs.run == 'true'
-        with:
-          fetch-depth: 0
-      - uses: dtolnay/rust-toolchain@stable
-        if: steps.decide.outputs.run == 'true'
-      - name: pause while a promotion PR is open
-        id: pause
-        if: steps.decide.outputs.run == 'true'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          n=$(gh pr list --repo "$GITHUB_REPOSITORY" --base main --head nightly --state open --json number --jq 'length')
-          if [ "$n" -gt 0 ]; then
-            echo "paused=true" >> "$GITHUB_OUTPUT"
-            echo "::notice::promotion PR open — patch ladder paused (adr/022)"
-          fi
-      - name: bump patch + regen + push
-        id: do
-        if: steps.decide.outputs.run == 'true' && steps.pause.outputs.paused != 'true'
-        run: |
-          set -eu
-          if git log -1 --format=%s | grep -q '^chore(release): bump'; then
-            echo "::notice::head is already a bump commit — nothing to do"
-            exit 0
-          fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          cargo xtask bump patch
-          if git diff --quiet; then
-            echo "::error::cargo xtask bump produced no changes"
-            exit 1
-          fi
-          version=$(sed -n 's/^version = "\(.*\)"$/\1/p' Cargo.toml | head -n1)
-          git add -A
-          git commit -m "chore(release): bump to ${version}"
-          pushed=0
-          for attempt in 1 2 3 4 5; do
-            # fully-qualified refspecs: the repo has both a nightly branch and
-            # a nightly release tag — a bare `nightly` dst is ambiguous and
-            # git refuses the push.
-            if git pull --rebase origin refs/heads/nightly && git push origin HEAD:refs/heads/nightly; then
-              pushed=1
-              break
-            fi
-            sleep $((attempt * 10))
-          done
-          if [ "$pushed" != 1 ]; then
-            echo "::error::could not push the bump (lost 5 races) — rerun via workflow_dispatch"
-            exit 1
-          fi
-          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
-      - name: resolve sha
-        id: resolve
-        if: always()
-        run: echo "sha=${{ steps.do.outputs.sha || github.sha }}" >> "$GITHUB_OUTPUT"
-
   build:
     name: build ${{ matrix.target }}
-    needs: bump
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -117,9 +37,6 @@ jobs:
             target: aarch64-apple-darwin
     steps:
       - uses: actions/checkout@v4
-        with:
-          # the bumped sha on nightly pushes (adr/022); the event sha elsewhere
-          ref: ${{ needs.bump.outputs.sha }}
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
@@ -139,71 +56,10 @@ jobs:
           path: carpenter-${{ matrix.target }}.tar.gz
           if-no-files-found: error
 
-  # Promotion minor bump (adr/022): when a nightly→main PR opens, the
-  # release-bot GitHub App pushes main's minor+1.0.0 onto the nightly head so
-  # the released stable IS the bump (main is frozen — only PR content reaches
-  # it). The App token (not GITHUB_TOKEN) is required: its pushes fire the
-  # synchronize event, so the PR's required checks re-run. Idempotent — skips
-  # when the version is already correct. Secrets: RELEASE_BOT_APP_ID +
-  # RELEASE_BOT_PRIVATE_KEY (adr/022 setup).
-  promote-bump:
-    name: bump (promotion minor, release-bot)
-    if: >-
-      github.event_name == 'pull_request' && github.base_ref == 'main' &&
-      github.head_ref == 'nightly' &&
-      (github.event.action == 'opened' || github.event.action == 'reopened')
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - uses: dtolnay/rust-toolchain@stable
-      - name: expected = main's minor+1
-        id: expect
-        run: |
-          set -eu
-          git fetch origin main
-          base=$(git show origin/main:Cargo.toml | sed -n 's/^version = "\(.*\)"$/\1/p' | head -n1)
-          IFS='.' read -r bmaj bmin _ <<<"$base"
-          echo "expected=${bmaj}.$((bmin+1)).0" >> "$GITHUB_OUTPUT"
-          echo "bmaj=${bmaj}" >> "$GITHUB_OUTPUT"
-      - name: create app token
-        uses: actions/create-github-app-token@v1
-        id: app
-        with:
-          app-id: ${{ secrets.RELEASE_BOT_APP_ID }}
-          private-key: ${{ secrets.RELEASE_BOT_PRIVATE_KEY }}
-          owner: ${{ github.repository_owner }}
-          repositories: ${{ github.event.repository.name }}
-      - name: land the bump onto nightly (idempotent)
-        env:
-          EXPECTED: ${{ steps.expect.outputs.expected }}
-          BASE_MAJOR: ${{ steps.expect.outputs.bmaj }}
-          TOKEN: ${{ steps.app.outputs.token }}
-        run: |
-          set -eu
-          head=$(sed -n 's/^version = "\(.*\)"$/\1/p' Cargo.toml | head -n1)
-          if [ "$head" = "$EXPECTED" ]; then
-            echo "::notice::version already ${EXPECTED} — nothing to do"
-            exit 0
-          fi
-          IFS='.' read -r hmaj _ _ <<<"$head"
-          if [ "$hmaj" != "$BASE_MAJOR" ]; then
-            echo "::error::nightly is ${head} (major ${hmaj}) while main expects ${EXPECTED} — reconcile manually (adr/022)"
-            exit 1
-          fi
-          git config user.name "carpenter-release-bot[bot]"
-          git config user.email "carpenter-release-bot[bot]@users.noreply.github.com"
-          cargo xtask bump --to "$EXPECTED"
-          git add -A
-          version=$(sed -n 's/^version = "\(.*\)"$/\1/p' Cargo.toml | head -n1)
-          git commit -m "chore(release): bump to ${version}"
-          git push "https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}.git" HEAD:refs/heads/nightly
-
   # Publish only on channel pushes (never from a PR); smoke still runs on PRs
   # against PR-built artifacts.
   release:
-    needs: [build, bump]
+    needs: build
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:
@@ -238,18 +94,17 @@ jobs:
         if: steps.ch.outputs.tag == 'nightly'
         env:
           GH_TOKEN: ${{ github.token }}
-          SHA: ${{ needs.bump.outputs.sha }}
         run: |
           gh release delete nightly --cleanup-tag --yes || true
           gh release create nightly dist/carpenter-*.tar.gz dist/SHA256SUMS scripts/install.sh \
             --prerelease \
-            --target "$SHA" \
-            --title "carpenter nightly (${SHA::7})" \
+            --target "$GITHUB_SHA" \
+            --title "carpenter nightly (${GITHUB_SHA::7})" \
             --notes "Rolling prerelease (canary) from the nightly branch.
 
           Unstable by design — the README serves stable only. Install (Linux x86_64, macOS Apple Silicon):
 
-              curl -LsSf https://github.com/meolord29/Carpenter/releases/download/nightly/install.sh | sh"
+              curl -LsSf https://github.com/tensily/Carpenter/releases/download/nightly/install.sh | sh"
       - name: publish stable release
         if: steps.ch.outputs.tag != 'nightly'
         env:
@@ -263,42 +118,9 @@ jobs:
 
           Install (Linux x86_64, macOS Apple Silicon):
 
-              curl -LsSf https://github.com/meolord29/Carpenter/releases/latest/download/install.sh | sh
+              curl -LsSf https://github.com/tensily/Carpenter/releases/latest/download/install.sh | sh
 
           Rollback: install any previous vX.Y.Z release the same way, substituting its tag for \`latest\`."
-
-  # Recut (adr/022): after a promotion publishes stable, fast-forward nightly
-  # to the promotion merge so the trunk absorbs main's merge commit and the
-  # ladder resumes at X.(Y+1).1. FF-only by construction — if nightly moved
-  # in between, fail loudly and reconcile by merging main back via a PR.
-  # GITHUB_TOKEN on purpose: no workflow cascade, the next merge rolls the
-  # channel. Recreates nightly if it was deleted. Also runs on
-  # workflow_dispatch (main) to retry a failed recut without re-publishing.
-  recut:
-    name: recut nightly from main
-    needs: release
-    if: >-
-      github.ref_name == 'main' &&
-      (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
-      (needs.release.result == 'success' || needs.release.result == 'skipped')
-    runs-on: ubuntu-latest
-    steps:
-      # full history: a depth-1 checkout cannot negotiate a push of a merge
-      # commit whose parents it never fetched — the server rejects a valid
-      # fast-forward with "fetch first" (that is exactly how the first live
-      # recut failed while nightly was main's own second parent).
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - name: fast-forward nightly to the promotion merge
-        run: |
-          set -eu
-          if git push origin "$GITHUB_SHA":refs/heads/nightly; then
-            echo "::notice::nightly fast-forwarded to ${GITHUB_SHA::7}"
-          else
-            echo "::error::nightly moved since the promotion merge — reconcile (PR main into nightly), then workflow_dispatch this run on main"
-            exit 1
-          fi
 
   # Smoke (adr/019 testing tier): verify the release artifact via the real
   # installer pipeline — tarball, checksum, install.sh, register — on a clean
@@ -382,9 +204,9 @@ jobs:
           if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
             CARPENTER_DOWNLOAD_BASE="file://${GITHUB_WORKSPACE}/dist" sh scripts/install.sh
           elif [ "$GITHUB_REF_NAME" = "nightly" ]; then
-            curl -LsSf https://github.com/meolord29/Carpenter/releases/download/nightly/install.sh | sh
+            curl -LsSf https://github.com/tensily/Carpenter/releases/download/nightly/install.sh | sh
           else
-            curl -LsSf https://github.com/meolord29/Carpenter/releases/latest/download/install.sh | sh
+            curl -LsSf https://github.com/tensily/Carpenter/releases/latest/download/install.sh | sh
           fi
       - name: path report (diagnostic — never fails)
         if: always()

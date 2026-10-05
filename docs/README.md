@@ -1,6 +1,6 @@
 # carpenter docs
 
-Five areas. The **code is the source of truth**; these are the human-readable
+Six areas. The **code is the source of truth**; these are the human-readable
 mirrors plus the generated contracts. When code and docs disagree, the code wins
 — update the docs.
 
@@ -11,6 +11,7 @@ mirrors plus the generated contracts. When code and docs disagree, the code wins
 | [specs/](specs/) | per-command I/O contracts (tables generated from types, adr/008) | [01-envelope](specs/01-envelope.md) |
 | [adr/](adr/) | architecture decision records (append-only history) | [adr/README](adr/README.md) |
 | [examples/](examples/) | one worked example per CLI leaf — the howto's single source (adr/007) | any `<module>/<fn>.md` |
+| [presentations/](presentations/) | talk decks given about carpenter (dated, self-contained HTML) | [2026-08-31-ai-tinkers](presentations/2026-08-31-ai-tinkers.html) |
 
 ## Read order (newcomer)
 
@@ -43,7 +44,7 @@ section is the human on-ramp.
 ### Quickstart
 
 ```sh
-git clone https://github.com/meolord29/Carpenter carpenter
+git clone https://github.com/tensily/Carpenter carpenter
 cd carpenter
 cargo xtask build        # gen-howto + gen-specs + strict build
 cargo test --workspace   # --workspace is required: bare cargo test skips xtask
@@ -74,30 +75,29 @@ The end-to-end authoring recipe lives in
 ### Releases (nightly + stable main)
 
 Two channels, two long-lived branches
-([adr/021](adr/021-nightly-main-channels.md)), with an automated version
-ladder ([adr/022](adr/022-automated-version-ladder.md)):
+([adr/021](adr/021-nightly-main-channels.md)), standard human-bump releases
+([adr/025](adr/025-standard-release-flow.md)):
 
 ```
 ivan/<topic> ──PR──▶ nightly   integration trunk; ground-rules checklist + owner-only
-                               approval; each merge bumps a patch (bot) and rolls the
-                               `nightly` prerelease at the bumped version
-nightly ──PR──▶ main           promotion; the release-bot lands main's minor+1 on PR
-                               open (guard enforces it); merge publishes immutable
-                               stable vX.Y.0 (Latest), then nightly is recut
-                               (fast-forwarded) to the promotion merge
+                               approval; each merge rolls the `nightly` prerelease
+                               (short-sha in the title; version unchanged)
+nightly ──PR──▶ main           promotion; carries the minor bump as a human commit
+                               (guard enforces main's minor+1); merge publishes
+                               immutable stable vX.Y.0 (Latest)
 ```
 
-Version ladder: **patch** per nightly merge, **minor** per promotion (the
-released stable), **major** manual — reserved for critical/official changes.
-`cargo xtask bump patch|minor|major|--to X.Y.Z` is the one mechanical step
-behind all of it; humans never edit versions in PRs.
+Version bumps are **human decisions delivered as ordinary PRs** —
+`cargo xtask bump patch|minor|major|--to X.Y.Z` is the mechanical step;
+**major** is reserved for critical/official changes. CI never commits to a
+protected branch and holds no credentials.
 
 - **`nightly` (unstable)** — the rolling prerelease `release.yml` re-creates on
   every push to the `nightly` branch. Canary users soak each build before
   promotion. Install / stay on it:
 
   ```sh
-  curl -LsSf https://github.com/meolord29/Carpenter/releases/download/nightly/install.sh | sh
+  curl -LsSf https://github.com/tensily/Carpenter/releases/download/nightly/install.sh | sh
   carpenter upgrade --channel nightly
   ```
 
@@ -124,22 +124,27 @@ verified by the owner at review):
    validation that ran instead.
 
 **Promotion checklist** (nightly → main PR):
-1. Open the PR — the `promote-bump` bot commits main's minor+1 (`chore(release):
-   bump to X.Y.0`) onto nightly; the `guard` check must be green.
-2. Merge; CI tags `v<version>` and publishes stable; the smoke lanes verify the
-   published artifact via the `/latest/` one-liner; then `recut` fast-forwards
-   `nightly` to the promotion merge and the patch ladder resumes.
+1. If `nightly` fell behind `main` since the last promotion (it does — there
+   is no recut), merge `main` into `nightly` via a PR first.
+2. Include the minor bump in the flow: `cargo xtask bump --to X.Y.0` as a
+   commit on `nightly` (its own small PR, folded into the promotion flow) so
+   the promotion PR carries main's minor+1 — the `guard` check enforces the
+   exact version and must be green.
+3. Merge; CI tags `v<version>` and publishes stable; the smoke lanes verify
+   the published artifact via the `/latest/` one-liner.
 
-Prerequisite (one-time, owner): the release-bot GitHub App + the
-`RELEASE_BOT_APP_ID`/`RELEASE_BOT_PRIVATE_KEY` secrets (adr/022).
+No prerequisites — CI holds no credentials and never commits (adr/025).
 
 **Rollback**: stable tags are immutable — install any previous `vX.Y.Z` by
 substituting its tag for `latest` in the install URL.
 
-**Branch protection** (`nightly` + `main`): require PRs, require review from
-codeowners (`CODEOWNERS` is `* @meolord29` — owner-only approval), require
-status checks (ci gates + smoke lanes; `main` additionally requires the
-`guard` job, which fails any PR into `main` whose head is not `nightly`).
+**Branch protection** ([adr/023](adr/023-ruleset-bypass-actors.md); rulesets
+only): `nightly` + `main` require PRs, review from codeowners
+(`CODEOWNERS` is `* @meolord29` — owner-only approval), and status checks
+(ci gates + smoke lanes, strict; `main` additionally requires the `guard`
+job, which fails any PR into `main` whose head is not `nightly`). Bypass
+actor: the owner alone — nothing automated pushes to either trunk
+(adr/025) — nobody else can push or merge either trunk.
 
 ### Contributing flow
 

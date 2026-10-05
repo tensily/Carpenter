@@ -10,6 +10,22 @@ the specs and the ` ```json ` blocks are the result envelopes. (Only the `sh`
 blocks are counted by the compile-time scenario gate — see
 `docs/adr/013-compile-enforced-scenarios.md`.)
 
+## 0. Interview the learner (intake)
+
+No carpenter command yet. Ask the user — the course spec in step 1 and the plan
+goals in step 4 are the *output* of this interview, not a guess (the skill's
+`## Learner intake` section gates `course create` on the user's agreement):
+
+- **What do you want to learn, and why?** — target outcome (project, role,
+  course, curiosity) and what "done" looks like.
+- **Background** — languages known, math/tools experience, prior exposure to
+  the topic; what they know well enough to skip.
+- **Constraints** — time budget, pace, appetite for lesson count and depth.
+
+The running example assumes the answers: knows Python basics, needs ML-ready
+linear algebra for a data-role move, has ~6 weeks — which is exactly what the
+`goal:` line below encodes.
+
 ## 1. Scaffold the course
 
 ```sh

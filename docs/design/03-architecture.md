@@ -17,7 +17,7 @@ core/
   helper.rs       render verification-only helper.py (reads+writes course.db: sets
                   pass_or_fail/last_check on each check — adr/010)
   skill.rs        render SKILL.md from typed fields (NAME/DESCRIPTION/WHAT_THIS_IS/
-                  WORKFLOW/PEDAGOGY) — no template (adr/009)
+                   INTAKE/WORKFLOW/WALKTHROUGH/PEDAGOGY) — no template (adr/009)
   output.rs       envelope structs -> JSON
   error.rs        CarpenterError hierarchy + codes
 models/           serde structs: Data (command success-payload enum, one variant

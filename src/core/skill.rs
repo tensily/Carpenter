@@ -25,9 +25,16 @@ const DESCRIPTION: &str =
 /// Authored prose — exists nowhere else in code to derive from.
 const WHAT_THIS_IS: &str = "carpenter is an agent-driven CLI that builds Python/Jupyter learning material. SQLite is the source of truth; notebooks render from it. You (the agent) are the tutor — carpenter is deterministic storage, rendering, and execution.";
 
-/// Authored workflow. Step 3 (content walkthrough) is mandatory and gated on
-/// explicit user confirmation — see [`WALKTHROUGH`].
-const WORKFLOW: &str = "1. `carpenter course create` scaffolds a course.\n2. `carpenter plan create` + `plan confirm` set goals and link covering lessons.\n3. **Content walkthrough** — run the Q&A in the next section with the user and get explicit confirmation of the lesson outline. Do NOT call `lesson create` until the user approves.\n4. `carpenter lesson create` authors each lesson (renders a notebook + a verification-only helper).\n5. The learner fills practice/quiz stubs; `carpenter quiz run` / `lesson execute` score them live.\n6. Use `progress`, `notes`, `skip`, `bug`, and `feature` to track and refine.";
+/// Authored learner-intake interview. Runs before ANY carpenter command — the
+/// answers shape the curriculum itself (course goal, plan goals, lesson count).
+/// `course create` is gated on the user agreeing to the course goal, mirroring
+/// the `lesson create` gate in [`WALKTHROUGH`].
+const INTAKE: &str = "Before any carpenter command, interview the user and **agree on the course goal**. Do NOT call `course create` until the answers below are in and the user approves the proposed goal. Ask, don't assume — a curriculum built on a guessed background is a process bug.\n\n1. **What do they want to learn, and why?** — the target outcome (project, role, course, curiosity) and what \"done\" looks like to them.\n2. **Background** — languages known, math/tools experience, prior exposure to the topic; what they already know well enough to skip.\n3. **Constraints** — time budget, pace, appetite for lesson count and depth.\n\nPropose the course goal and plan goals *from the answers* and confirm before scaffolding. Carry the answers into the content walkthrough (level, prerequisites, lesson count) — do not re-interrogate.";
+
+/// Authored workflow. Step 0 (learner intake) gates `course create` on the
+/// user's agreement ([`INTAKE`]); step 3 (content walkthrough) gates
+/// `lesson create` the same way — see [`WALKTHROUGH`].
+const WORKFLOW: &str = "0. **Learner intake** — run the interview in the next section and agree on the course goal. Do NOT call `course create` until the user approves it.\n1. `carpenter course create` scaffolds a course (goal shaped by the intake).\n2. `carpenter plan create` + `plan confirm` set goals and link covering lessons.\n3. **Content walkthrough** — run the Q&A in the next section with the user and get explicit confirmation of the lesson outline. Do NOT call `lesson create` until the user approves.\n4. `carpenter lesson create` authors each lesson (renders a notebook + a verification-only helper).\n5. The learner fills practice/quiz stubs; `carpenter quiz run` / `lesson execute` score them live.\n6. Use `progress`, `notes`, `skip`, `bug`, and `feature` to track and refine.";
 
 /// Authored pedagogy.
 const PEDAGOGY: &str = "One concept per lesson. Practice is attached to its teaching section; quizzes assess at the end. State is live only (no attempt history) — a verification-only helper writes `pass_or_fail`/`last_check` on each check. Skipped items are excluded from status derivation. Notes capture gaps, mistakes, strengths, patterns, and progress.";
@@ -35,7 +42,7 @@ const PEDAGOGY: &str = "One concept per lesson. Practice is attached to its teac
 /// Authored content-walkthrough checklist. Runs after `plan confirm`, before any
 /// `lesson create`. The agent must present the agreed outline back to the user and
 /// wait for confirmation — generating lessons before approval is a process bug.
-const WALKTHROUGH: &str = "Before generating any lesson, run this Q&A with the user and **confirm the proposed outline** (lesson list + per-lesson practice/quizzes + conventions). Do not call `lesson create` until the user explicitly approves.\n\n1. **Audience & scope** — level (beginner/intermediate/advanced), prerequisites, total lesson count, and grouping into parts/batches.\n2. **Outline** — for each lesson: title, the concepts it teaches, the practice functions (name + signature + return type), and the end-of-lesson quizzes. Propose the full list and let the user edit it.\n3. **Grading conventions** — agree these once and apply everywhere:\n   - Compare is **exact** by default (`compare:\"exact\"`); use `sorted`/`set` only when order or multiplicity is irrelevant.\n   - Cases return **plain Python** (`float(...)`, `.tolist()`, `int`, `bool`, `str`, nested `list`) — never raw NumPy arrays.\n   - **Float outputs round to 8 decimals** (`np.round(x, 8).tolist()`) so LAPACK noise (`inv`/`eig`/`svd`/`lstsq`) passes exact equality. Prefer integer-valued cases (bit-exact without rounding).\n   - Design cases to be **deterministic**: avoid sign/scale ambiguity (eigenvectors, SVD `U`/`V` columns) — grade on eigenvalues, singular values, ranks, traces, determinants, reconstructions, or `argmax` instead.\n4. **Stack & IDs** — language, the venv deps (`venv create` + `venv add`), and the slug/ID conventions. Author specs as **YAML** (block scalars keep multi-line markdown/code readable); `carpenter lesson new` emits a YAML template. Quote any value containing `:` (signatures always do).\n5. **Verification contract** — per lesson: (a) lock the answer key with `lesson verify` — each practice/quiz may carry a `solution` (author reference Python) that carpenter runs against its own cases in the course venv (`lesson verify --spec -` before create, `lesson verify <id>` to re-verify); (b) `lesson execute --allow-errors` reports `errored:0` (teaching cells run clean; empty stubs define functions and don't raise at define time); (c) `quiz run` on the fresh notebook reports all quizzes `pass_or_fail:false`. **Never hand-edit a rendered `lesson.ipynb`** — regenerate only via `lesson create` / `lesson update` / `lesson sync`.\n6. **Domain** — pick a concrete running example domain.\n\nPresent the agreed outline back as a checklist and proceed only after the user confirms.";
+const WALKTHROUGH: &str = "Before generating any lesson, run this Q&A with the user and **confirm the proposed outline** (lesson list + per-lesson practice/quizzes + conventions). Do not call `lesson create` until the user explicitly approves.\n\n1. **Audience & scope** — level (beginner/intermediate/advanced), prerequisites, total lesson count, and grouping into parts/batches. Carry the learner-intake answers in — do not re-interrogate.\n2. **Outline** — for each lesson: title, the concepts it teaches, the practice functions (name + signature + return type), and the end-of-lesson quizzes. Propose the full list and let the user edit it.\n3. **Grading conventions** — agree these once and apply everywhere:\n   - Compare is **exact** by default (`compare:\"exact\"`); use `sorted`/`set` only when order or multiplicity is irrelevant.\n   - Cases return **plain Python** (`float(...)`, `.tolist()`, `int`, `bool`, `str`, nested `list`) — never raw NumPy arrays.\n   - **Float outputs round to 8 decimals** (`np.round(x, 8).tolist()`) so LAPACK noise (`inv`/`eig`/`svd`/`lstsq`) passes exact equality. Prefer integer-valued cases (bit-exact without rounding).\n   - Design cases to be **deterministic**: avoid sign/scale ambiguity (eigenvectors, SVD `U`/`V` columns) — grade on eigenvalues, singular values, ranks, traces, determinants, reconstructions, or `argmax` instead.\n4. **Stack & IDs** — language, the venv deps (`venv create` + `venv add`), and the slug/ID conventions. Author specs as **YAML** (block scalars keep multi-line markdown/code readable); `carpenter lesson new` emits a YAML template. Quote any value containing `:` (signatures always do).\n5. **Verification contract** — per lesson: (a) lock the answer key with `lesson verify` — each practice/quiz may carry a `solution` (author reference Python) that carpenter runs against its own cases in the course venv (`lesson verify --spec -` before create, `lesson verify <id>` to re-verify); (b) `lesson execute --allow-errors` reports `errored:0` (teaching cells run clean; empty stubs define functions and don't raise at define time); (c) `quiz run` on the fresh notebook reports all quizzes `pass_or_fail:false`. **Never hand-edit a rendered `lesson.ipynb`** — regenerate only via `lesson create` / `lesson update` / `lesson sync`.\n6. **Domain** — pick a concrete running example domain.\n\nPresent the agreed outline back as a checklist and proceed only after the user confirms.";
 
 /// Validate a skill name against opencode's `^[a-z0-9]+(-[a-z0-9]+)*$`.
 pub fn name_is_valid(s: &str) -> bool {
@@ -98,7 +105,8 @@ pub fn render() -> Result<String, CarpenterError> {
     let body = format!(
         "# {NAME}\n\n\
          {WHAT_THIS_IS}\n\n\
-         ## Workflow\n\n{WORKFLOW}\n\n\
+          ## Learner intake\n\n{INTAKE}\n\n\
+          ## Workflow\n\n{WORKFLOW}\n\n\
          ## Content walkthrough\n\n{WALKTHROUGH}\n\n\
          ## Pedagogy\n\n{PEDAGOGY}\n\n\
          ## Command manual\n\n\
@@ -335,6 +343,14 @@ mod tests {
         assert!(
             s.contains("## Content walkthrough"),
             "body must carry the walkthrough section"
+        );
+        assert!(
+            s.contains("## Learner intake"),
+            "body must carry the learner-intake section"
+        );
+        assert!(
+            s.contains("Do NOT call `course create`"),
+            "intake must gate course creation on user agreement"
         );
         assert!(
             s.contains("Do not call `lesson create`"),

@@ -6,16 +6,54 @@
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use carpenter::core::release::{self, checksum_tool_for};
 
-/// A unique temp dir path for `tag` (caller creates it).
+static UNIQUE_SEQ: AtomicU64 = AtomicU64::new(0);
+
+/// A unique temp dir path for `tag` (caller creates it). Uniqueness never
+/// depends on clock resolution: the pid separates test binaries and the
+/// atomic counter separates threads (`SystemTime` granularity is
+/// platform-dependent — two macOS test threads once read the same nanosecond
+/// and one `release_fixture` deleted the other's staged binary).
 pub fn unique(tag: &str) -> PathBuf {
     let nanos = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
         .as_nanos();
-    std::env::temp_dir().join(format!("carpenter-it-{tag}-{}-{nanos}", std::process::id()))
+    let seq = UNIQUE_SEQ.fetch_add(1, Ordering::Relaxed);
+    std::env::temp_dir().join(format!(
+        "carpenter-it-{tag}-{}-{nanos}-{seq}",
+        std::process::id()
+    ))
+}
+
+#[test]
+fn unique_is_distinct_under_contention() {
+    let paths = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    let mut handles = Vec::new();
+    for _ in 0..16 {
+        let paths = std::sync::Arc::clone(&paths);
+        handles.push(std::thread::spawn(move || {
+            for _ in 0..64 {
+                paths.lock().unwrap().push(unique("contend"));
+            }
+        }));
+    }
+    for h in handles {
+        h.join().unwrap();
+    }
+    let paths = paths.lock().unwrap();
+    let mut distinct = std::collections::HashSet::new();
+    for p in paths.iter() {
+        assert!(
+            distinct.insert(p.clone()),
+            "duplicate temp path {}",
+            p.display()
+        );
+    }
+    assert_eq!(distinct.len(), 16 * 64);
 }
 
 /// Build a release-layout fixture (tarball + correct SHA256SUMS) from the real

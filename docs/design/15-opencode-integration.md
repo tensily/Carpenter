@@ -25,7 +25,7 @@ file and no monolithic prose block ([adr/009](../adr/009-skill-assembled-from-fi
 |-------|--------|
 | `NAME` | const `"carpenter"` |
 | `DESCRIPTION` | const — the frontmatter matcher (authored once) |
-| `WHAT_THIS_IS` / `WORKFLOW` / `WALKTHROUGH` / `PEDAGOGY` | const — the only authored prose (exists nowhere else) |
+| `WHAT_THIS_IS` / `INTAKE` / `WORKFLOW` / `WALKTHROUGH` / `PEDAGOGY` | const — the only authored prose (exists nowhere else) |
 | `MANUAL` | `crate::manual::MANUAL` (the generated howto) — inlined verbatim under `## Command manual` at render time, H1 stripped |
 | `version` | `CARGO_PKG_VERSION` |
 | `bin` | `std::env::current_exe` |

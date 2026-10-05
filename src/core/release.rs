@@ -13,7 +13,7 @@ use crate::core::error::CarpenterError;
 use crate::core::store::io_to_store;
 
 /// GitHub repo that hosts releases.
-pub const REPO: &str = "meolord29/Carpenter";
+pub const REPO: &str = "tensily/Carpenter";
 /// The rolling prerelease tag the `nightly` branch publishes (adr/021).
 pub const TAG: &str = "nightly";
 
@@ -250,11 +250,11 @@ mod tests {
         // stable follows GitHub's Latest pointer; nightly pins the rolling tag
         assert_eq!(
             Channel::Stable.base_url(),
-            "https://github.com/meolord29/Carpenter/releases/latest/download"
+            "https://github.com/tensily/Carpenter/releases/latest/download"
         );
         assert_eq!(
             Channel::Nightly.base_url(),
-            "https://github.com/meolord29/Carpenter/releases/download/nightly"
+            "https://github.com/tensily/Carpenter/releases/download/nightly"
         );
     }
 

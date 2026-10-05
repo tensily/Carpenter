@@ -14,8 +14,8 @@
 - [ ] If the CLI surface or study workflow changed:
       `.opencode/agents/carpenter-dev-validate.md` (the QA agent's
       checklist/prompt) is updated to match in this PR.
-- [ ] No version bumps in this PR — the ladder is automated (adr/022): patch
-      on merge into nightly, minor via the release-bot on promotion.
+- [ ] No version bump in this PR unless it is release prep — bumps are
+      human commits (`cargo xtask bump`, adr/025), never automated.
 - [ ] A **carpenter-dev-validate report** is attached below — **required when
       this PR changes learner-facing or course-building surface** (commands,
       envelope shapes, study workflow, howto contract): the subject-learning
@@ -36,7 +36,6 @@
 
 ## Promotion PR (nightly → main only)
 
-- [ ] The `promote-bump` bot committed `chore(release): bump to <main's
-      minor+1>.0` onto nightly when this PR opened, and `guard` is green
-      (adr/022 — versions are never bumped by hand).
+- [ ] This PR carries `chore(release): bump to <main's minor+1>.0` (a human
+      `cargo xtask bump` commit, adr/025), and `guard` is green.
 - [ ] Head branch is `nightly` — the `guard` check enforces this.
