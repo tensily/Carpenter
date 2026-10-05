@@ -44,7 +44,7 @@ section is the human on-ramp.
 ### Quickstart
 
 ```sh
-git clone https://github.com/meolord29/Carpenter carpenter
+git clone https://github.com/tensily/Carpenter carpenter
 cd carpenter
 cargo xtask build        # gen-howto + gen-specs + strict build
 cargo test --workspace   # --workspace is required: bare cargo test skips xtask
@@ -98,7 +98,7 @@ behind all of it; humans never edit versions in PRs.
   promotion. Install / stay on it:
 
   ```sh
-  curl -LsSf https://github.com/meolord29/Carpenter/releases/download/nightly/install.sh | sh
+  curl -LsSf https://github.com/tensily/Carpenter/releases/download/nightly/install.sh | sh
   carpenter upgrade --channel nightly
   ```
 

@@ -43,7 +43,7 @@ pub mod examples {
                     upgraded: true,
                     version: env!("CARGO_PKG_VERSION").into(),
                     bin: String::from("~/.local/bin/carpenter"),
-                    source: String::from("https://github.com/meolord29/Carpenter/releases/latest/download/carpenter-x86_64-unknown-linux-musl.tar.gz"),
+                    source: String::from("https://github.com/tensily/Carpenter/releases/latest/download/carpenter-x86_64-unknown-linux-musl.tar.gz"),
                     skill: Some(json!([
                         {"refreshed": true, "app": "opencode", "path": "~/.config/opencode/skills/carpenter/SKILL.md"},
                         {"refreshed": true, "app": "claude-code", "path": "~/.claude/skills/carpenter/SKILL.md"}
