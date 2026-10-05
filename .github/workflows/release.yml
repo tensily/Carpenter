@@ -32,16 +32,16 @@ jobs:
   # Patch ladder (adr/022). Runs first on every nightly push: bumps the
   # version, regenerates every derived surface, pushes `chore(release): bump
   # to X.Y.Z` — then build/release consume the bumped sha so the nightly
-  # artifact REPORTS the new version. The push uses GITHUB_TOKEN: the repo
-  # is org-owned now, so the built-in GitHub Actions integration is a bypass
-  # actor on the trunk rulesets (integration bypass via a dedicated App was
-  # observed NOT to be honored for git pushes — on the old user-owned app
-  # and the new org-owned app alike). GITHUB_TOKEN pushes never fire
-  # workflows, so no cascade run happens at all (build/release ride this
-  # same run; the job-level `if` below stays as a harmless belt-and-suspenders
-  # guard for any bot-push cascade). No-ops (resolve sha = github.sha) on
-  # PRs and main pushes, while a promotion PR is open (ladder pause), or on
-  # an existing bump head.
+  # artifact REPORTS the new version. The push uses the RELEASE_PAT secret
+  # (the owner's fine-grained PAT): ruleset bypass is only honored for
+  # admin-identity pushes — both App-integration bypass entries were
+  # silently not honored for git pushes (old user-owned app and new
+  # org-owned app alike), while the owner holds an Always bypass on the
+  # trunk rulesets. Unlike GITHUB_TOKEN, PAT pushes DO fire workflows: the
+  # cascade run lands in the same concurrency group and canc-in-progress
+  # retires this run, so exactly one run builds/publishes the bumped sha.
+  # No-ops (resolve sha = github.sha) on PRs and main pushes, while a
+  # promotion PR is open (ladder pause), or on an existing bump head.
   bump:
     name: bump (patch ladder)
     if: >-
@@ -80,6 +80,8 @@ jobs:
       - name: bump patch + regen + push
         id: do
         if: steps.decide.outputs.run == 'true' && steps.pause.outputs.paused != 'true'
+        env:
+          TOKEN: ${{ secrets.RELEASE_PAT }}
         run: |
           set -eu
           if git log -1 --format=%s | grep -q '^chore(release): bump'; then
@@ -101,7 +103,7 @@ jobs:
             # fully-qualified refspecs: the repo has both a nightly branch and
             # a nightly release tag — a bare `nightly` dst is ambiguous and
             # git refuses the push.
-            if git pull --rebase origin refs/heads/nightly && git push origin HEAD:refs/heads/nightly; then
+            if git pull --rebase origin refs/heads/nightly && git push "https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}.git" HEAD:refs/heads/nightly; then
               pushed=1
               break
             fi
@@ -155,12 +157,13 @@ jobs:
   # Promotion minor bump (adr/022): when a nightly→main PR opens, the
   # release-bot GitHub App pushes main's minor+1.0.0 onto the nightly head so
   # the released stable IS the bump (main is frozen — only PR content reaches
-  # it). The App token (not GITHUB_TOKEN) is required: its pushes fire the
-  # synchronize event, so the PR's required checks re-run. Idempotent — skips
-  # when the version is already correct. Secrets: RELEASE_BOT_APP_ID +
-  # RELEASE_BOT_PRIVATE_KEY (adr/022 setup).
+  # it). The push uses RELEASE_PAT (owner PAT): unlike GITHUB_TOKEN its pushes
+  # fire the synchronize event, so the PR's required checks re-run — and it
+  # carries the owner's ruleset bypass, which App-integration bypass did not
+  # (silently unhonored for git pushes). Idempotent — skips when the version
+  # is already correct.
   promote-bump:
-    name: bump (promotion minor, release-bot)
+    name: bump (promotion minor)
     if: >-
       github.event_name == 'pull_request' && github.base_ref == 'main' &&
       github.head_ref == 'nightly' &&
@@ -180,19 +183,11 @@ jobs:
           IFS='.' read -r bmaj bmin _ <<<"$base"
           echo "expected=${bmaj}.$((bmin+1)).0" >> "$GITHUB_OUTPUT"
           echo "bmaj=${bmaj}" >> "$GITHUB_OUTPUT"
-      - name: create app token
-        uses: actions/create-github-app-token@v1
-        id: app
-        with:
-          app-id: ${{ secrets.RELEASE_BOT_APP_ID }}
-          private-key: ${{ secrets.RELEASE_BOT_PRIVATE_KEY }}
-          owner: ${{ github.repository_owner }}
-          repositories: ${{ github.event.repository.name }}
       - name: land the bump onto nightly (idempotent)
         env:
           EXPECTED: ${{ steps.expect.outputs.expected }}
           BASE_MAJOR: ${{ steps.expect.outputs.bmaj }}
-          TOKEN: ${{ steps.app.outputs.token }}
+          TOKEN: ${{ secrets.RELEASE_PAT }}
         run: |
           set -eu
           head=$(sed -n 's/^version = "\(.*\)"$/\1/p' Cargo.toml | head -n1)
@@ -284,11 +279,10 @@ jobs:
   # to the promotion merge so the trunk absorbs main's merge commit and the
   # ladder resumes at X.(Y+1).1. FF-only by construction — if nightly moved
   # in between, fail loudly and reconcile by merging main back via a PR.
-  # Pushes via the release-bot App token (ruleset bypass, adr/023); that push
-  # fires one nightly run whose bump job resumes the patch ladder immediately
-  # — its own bot-pushed bump commit is then cascade-suppressed by the bump
-  # job's `if`. Also runs on workflow_dispatch (main) to retry a failed recut
-  # without re-publishing.
+  # Pushes via RELEASE_PAT (owner PAT — ruleset bypass; see the bump job's
+  # transfer note); that push fires one nightly run whose bump job resumes
+  # the patch ladder immediately. Also runs on workflow_dispatch (main) to
+  # retry a failed recut without re-publishing.
   recut:
     name: recut nightly from main
     needs: release
@@ -305,17 +299,9 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: create app token
-        uses: actions/create-github-app-token@v1
-        id: app
-        with:
-          app-id: ${{ secrets.RELEASE_BOT_APP_ID }}
-          private-key: ${{ secrets.RELEASE_BOT_PRIVATE_KEY }}
-          owner: ${{ github.repository_owner }}
-          repositories: ${{ github.event.repository.name }}
       - name: fast-forward nightly to the promotion merge
         env:
-          TOKEN: ${{ steps.app.outputs.token }}
+          TOKEN: ${{ secrets.RELEASE_PAT }}
         run: |
           set -eu
           if git push "https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "$GITHUB_SHA":refs/heads/nightly; then
