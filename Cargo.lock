@@ -78,7 +78,7 @@ checksum = "b588b76d00fde79687d7646a9b5bdf3cc0f655e0bbd080335a95d7e96f3587da"
 
 [[package]]
 name = "carpenter"
-version = "0.10.0"
+version = "0.10.1"
 dependencies = [
  "clap",
  "dirs",
@@ -687,7 +687,7 @@ checksum = "589f6da84c646204747d1270a2a5661ea66ed1cced2631d546fdfb155959f9ec"
 
 [[package]]
 name = "xtask"
-version = "0.10.0"
+version = "0.10.1"
 dependencies = [
  "anyhow",
  "carpenter",

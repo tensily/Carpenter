@@ -7,8 +7,8 @@ Global scope only.
 <!-- BEGIN GENERATED -->
 | cmd | input | `data` (ok) |
 |-----|-------|-------------|
-| `register [--app opencode]` | --app (default `opencode`) | `{"app":"opencode","path":"~/.config/opencode/skills/carpenter/SKILL.md","version":"0.10.0","installed":true}` — writes `SKILL.md` + merges `"skill":{"carpenter":"allow"}`; `agents` ⇒ `ValidationError` |
-| `register --app claude-code` | --app | `{"app":"claude-code","path":"~/.claude/skills/carpenter/SKILL.md","version":"0.10.0","installed":true}` — writes `SKILL.md` into `~/.claude/skills/` (auto-discovered — no permission merge) |
+| `register [--app opencode]` | --app (default `opencode`) | `{"app":"opencode","path":"~/.config/opencode/skills/carpenter/SKILL.md","version":"0.10.1","installed":true}` — writes `SKILL.md` + merges `"skill":{"carpenter":"allow"}`; `agents` ⇒ `ValidationError` |
+| `register --app claude-code` | --app | `{"app":"claude-code","path":"~/.claude/skills/carpenter/SKILL.md","version":"0.10.1","installed":true}` — writes `SKILL.md` into `~/.claude/skills/` (auto-discovered — no permission merge) |
 | `register --print-skill` | --app | `{"skill":"…"}` — prints the rendered `SKILL.md` bytes; no filesystem change |
 | `deregister [--app opencode]` | --app (default `opencode`) | `{"app":"opencode","path":"~/.config/opencode/skills/carpenter/SKILL.md","removed":true}` — removes `SKILL.md` (+ dir if empty) + the `carpenter` allow key (apps that have one); `NotFound` if absent |
 <!-- END GENERATED -->

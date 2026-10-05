@@ -1,6 +1,6 @@
 [package]
 name = "carpenter"
-version = "0.10.0"
+version = "0.10.1"
 edition = "2021"
 description = "Agent-driven CLI that builds Python/Jupyter learning material."
 license = "BSD-3-Clause"

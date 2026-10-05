@@ -1289,7 +1289,7 @@ carpenter register --app opencode
 
 Result (one envelope on stdout):
 ```json
-{"status":"ok","message":"skill registered: opencode","data":{"app":"opencode","path":"/…/opencode/skills/carpenter/SKILL.md","version":"0.10.0","installed":true}}
+{"status":"ok","message":"skill registered: opencode","data":{"app":"opencode","path":"/…/opencode/skills/carpenter/SKILL.md","version":"0.10.1","installed":true}}
 ```
 
 Writes `SKILL.md` + merges the `permission.skill.carpenter="allow"` entry. `--print-skill` prints the rendered bytes instead (no FS change).
@@ -1368,7 +1368,7 @@ carpenter upgrade --bin-dir ~/.local/bin
 
 Result (one envelope on stdout):
 ```json
-{"status":"ok","message":"upgraded: 0.10.0","data":{"upgraded":true,"version":"0.10.0","bin":"/home/u/.local/bin/carpenter","source":"https://github.com/tensily/Carpenter/releases/latest/download/carpenter-x86_64-unknown-linux-musl.tar.gz","skill":[{"refreshed":true,"app":"opencode","path":"/home/u/.config/opencode/skills/carpenter/SKILL.md"},{"refreshed":true,"app":"claude-code","path":"/home/u/.claude/skills/carpenter/SKILL.md"}]}}
+{"status":"ok","message":"upgraded: 0.10.1","data":{"upgraded":true,"version":"0.10.1","bin":"/home/u/.local/bin/carpenter","source":"https://github.com/tensily/Carpenter/releases/latest/download/carpenter-x86_64-unknown-linux-musl.tar.gz","skill":[{"refreshed":true,"app":"opencode","path":"/home/u/.config/opencode/skills/carpenter/SKILL.md"},{"refreshed":true,"app":"claude-code","path":"/home/u/.claude/skills/carpenter/SKILL.md"}]}}
 ```
 
 Fetches the latest **stable** release (checksum-verified), replaces the binary, and
@@ -1418,7 +1418,7 @@ carpenter link register
 
 Result (one envelope on stdout):
 ```json
-{"status":"ok","message":"link manifest emitted","data":{"name":"carpenter","version":"0.10.0","bin":"/…/carpenter","summary":"Agent-driven CLI that builds Python/Jupyter learning material.","howto_excerpt":"Run `carpenter howto` for the full, always-current command manual.","commands":["course","lesson","plan","quiz","howto"]}}
+{"status":"ok","message":"link manifest emitted","data":{"name":"carpenter","version":"0.10.1","bin":"/…/carpenter","summary":"Agent-driven CLI that builds Python/Jupyter learning material.","howto_excerpt":"Run `carpenter howto` for the full, always-current command manual.","commands":["course","lesson","plan","quiz","howto"]}}
 ```
 
 Future CLI registry manifest. Read-only emit.
