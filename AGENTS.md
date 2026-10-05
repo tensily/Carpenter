@@ -113,14 +113,13 @@ CI (`.github/workflows/ci.yml`) mirrors these gates on an
 [adr/012](docs/adr/012-cross-platform-paths.md)) — `rust-toolchain.toml`
 pins stable and `uv` is installed. Releases (`.github/workflows/release.yml`)
 are branch-governed channels ([adr/021](docs/adr/021-nightly-main-channels.md))
-with an automated version ladder ([adr/022](docs/adr/022-automated-version-ladder.md)):
-feature PRs target `nightly`; every merge into `nightly` bumps a patch (the
-`bump` job commits it, then the run rolls the rolling `nightly` prerelease at
-the bumped sha), and a `nightly → main` promotion publishes an immutable
-stable `vX.Y.0` — the release-bot App lands main's minor+1 on PR open (patch
-ladder pauses meanwhile), a `recut` job fast-forwards `nightly` to the
-promotion merge after publishing. Versions are never bumped by hand below
-major (`cargo xtask bump` is the one mechanical step). ci.yml's `guard` job
+in the standard human-bump shape ([adr/025](docs/adr/025-standard-release-flow.md)):
+feature PRs target `nightly`; a merge into `nightly` rolls the rolling
+`nightly` prerelease at that sha (version unchanged — the title carries the
+short-sha), and a `nightly → main` promotion publishes an immutable stable
+`vX.Y.0`. Versions are bumped by humans via `cargo xtask bump` as a commit
+in a normal PR — fold it into the release-prep PR; CI never commits to a
+protected branch and holds no credentials. ci.yml's `guard` job
 fails any PR into `main` whose head is not `nightly` or whose version is not
 exactly main's minor+1. Each
 publish ships `x86_64-unknown-linux-musl` + `aarch64-apple-darwin` tarballs,
@@ -139,15 +138,15 @@ fetches the Latest stable release — checksum-verified via the same pipeline �
 and refreshes registered apps' skills; `--channel nightly` opts into the canary
 (adr/018, adr/021).
 
-## Integration & release (adr/021, adr/022)
-`nightly` is the integration trunk: always green; every merge bumps a patch
-and rolls the rolling `nightly` prerelease at the bumped sha (adr/022). `main`
-is the frozen release branch — stable `vX.Y.0` publishes only from a
-`nightly → main` promotion PR (the release-bot lands the minor bump; `guard`
-checks head == `nightly` and the exact version), and a `recut` job
-fast-forwards `nightly` to the promotion merge afterwards. Bootstrap:
-`nightly` was cut from `main` HEAD when the model landed (adr/021's PR merged
-into `nightly`, rolling the first prerelease).
+## Integration & release (adr/021, adr/025)
+`nightly` is the integration trunk: always green; a merge rolls the rolling
+`nightly` prerelease at that sha. `main` is the frozen release branch —
+stable `vX.Y.0` publishes only from a `nightly → main` promotion PR whose
+content carries the minor bump (human commit; `guard` checks head ==
+`nightly` and the exact version). After a promotion `nightly` stays behind
+`main`; reconcile before the next promotion by merging `main` back into
+`nightly` via a PR, then bump. Bootstrap: `nightly` was cut from `main` HEAD
+when the model landed (adr/021's PR merged into `nightly`).
 - **Short-lived branches only**: `ivan/<topic>`, target ≤1 day of work, one
   concern per branch. No long-lived branches — unfinished work lands dark
   behind the `dev` feature flag (adr/016) instead of aging on a branch. The one
@@ -162,20 +161,16 @@ into `nightly`, rolling the first prerelease).
   make every nightly merge owner-approved.
 - **Merge green or don't merge**: ci.yml must pass on the branch head; rebase
   onto `nightly` before merging if it has moved. Delete the branch after merge.
-- **Branch protection** ([adr/023](docs/adr/023-ruleset-bypass-actors.md) —
+- **Branch protection** ([adr/023](docs/adr/023-ruleset-bypass-actors.md),
+  revised by [adr/025](docs/adr/025-standard-release-flow.md) —
   rulesets-only; no classic branch protection): `nightly` + `main` each
   require a PR, code-owner review, and the checks (gates, build, smoke
   lanes; strict/up-to-date), forbid force-pushes and deletions; `main`
   additionally requires the `guard` job (only `nightly` merges into it).
-  Bypass actors: the owner (`always` — so "green before merge" is policy,
-  not mechanism; direct pushes stay reserved for generated-surface fixes
-  like `howto.gen.md`/spec-table drift) and the release-bot App (all
-  ladder pushes: bump, promote-bump, recut — `GITHUB_TOKEN` pushes are
-  declined on user-owned repos, so the ladder pushes with the App token;
-  its would-be cascade runs are suppressed by the bump job's `if`). Nobody
-  else can push or merge either trunk. Even the owner's plain merge is
-  refused (sole code owner can't self-approve) — bypassing is explicit
-  (`gh pr merge --admin`).
+  Bypass actors: the owner alone — nothing automated pushes to either
+  trunk, so no CI identity holds bypass or any other credential. Even the
+  owner's plain merge is refused (sole code owner can't self-approve) —
+  bypassing is explicit (`gh pr merge --admin`).
 
 ## Dev authoring loop (`--dev`)
 Two build stages ([design/19](docs/design/19-dev-build.md),
