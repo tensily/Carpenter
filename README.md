@@ -44,7 +44,7 @@ No app, no web UI, no bundled course library — it needs an AI coding agent.
 One line:
 
 ```sh
-curl -LsSf https://github.com/meolord29/Carpenter/releases/latest/download/install.sh | sh
+curl -LsSf https://github.com/tensily/Carpenter/releases/latest/download/install.sh | sh
 ```
 
 The installer prints a branded banner and an install plan — download source,

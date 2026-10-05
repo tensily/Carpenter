@@ -2,7 +2,7 @@
 # carpenter installer — fetches the `nightly` release binary for this platform.
 #
 # Devs/canary users:
-#   curl -LsSf https://github.com/meolord29/Carpenter/releases/download/nightly/install.sh | sh
+#   curl -LsSf https://github.com/tensily/Carpenter/releases/download/nightly/install.sh | sh
 #
 # Channels (adr/021): this stock script follows `nightly`; the stable release
 # attaches a tag-patched copy (TAG="vX.Y.Z"), and /releases/latest/download/
@@ -21,7 +21,7 @@
 #   CARPENTER_INSTALL_YES=1  skip the interactive confirmation prompt
 set -eu
 
-REPO="meolord29/Carpenter"
+REPO="tensily/Carpenter"
 TAG="nightly"
 BASE="${CARPENTER_DOWNLOAD_BASE:-https://github.com/${REPO}/releases/download/${TAG}}"
 INSTALL_DIR="${CARPENTER_INSTALL_DIR:-${HOME}/.local/bin}"
