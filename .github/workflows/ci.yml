@@ -14,9 +14,10 @@ concurrency:
 
 jobs:
   # adr/021: `main` is the frozen release branch — the only branch that may
-  # merge into it is `nightly`. Fail any other PR targeting main, and (adr/022)
-  # require the promotion to carry exactly main's minor+1 at patch 0 — the
-  # promote-bump bot lands it on PR open; this guard is the enforcement.
+  # merge into it is `nightly`. Fail any other PR targeting main, and (adr/025,
+  # was adr/022) require the promotion to carry exactly main's minor+1 at
+  # patch 0 — humans make that bump via `cargo xtask bump` in the release
+  # flow; this guard is the enforcement.
   guard:
     name: guard (only nightly merges into main)
     if: github.event_name == 'pull_request' && github.base_ref == 'main'
@@ -44,7 +45,7 @@ jobs:
           IFS='.' read -r bmaj bmin _ <<<"$base"
           expected="${bmaj}.$((bmin+1)).0"
           if [ "$head" != "$expected" ]; then
-            echo "::error::promotion must carry exactly ${expected} (main is ${base}); got ${head}. The promote-bump bot does this on PR open — reopen the PR if it was missing."
+            echo "::error::promotion must carry exactly ${expected} (main is ${base}); got ${head}. Bump via `cargo xtask bump --to ${expected}` on nightly and update this PR (adr/025)."
             exit 1
           fi
 

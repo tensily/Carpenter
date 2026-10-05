@@ -25,6 +25,7 @@ sequence are retired decisions (not listed). Read topically; start with the inde
 | 019 | [019-uninstall-semantics.md](019-uninstall-semantics.md) | `uninstall`: best-effort skill removal, self-delete binary, keep config unless `--purge-config` |
 | 020 | [020-branch-governed-channels.md](020-branch-governed-channels.md) | branch-governed release channels: `pre-release`→`edge` canary, `release`→stable `vX.Y.Z` (Latest) — superseded by 021 |
 | 021 | [021-nightly-main-channels.md](021-nightly-main-channels.md) | nightly + main channels: owner-gated `nightly` trunk, frozen `main`, PR ground rules + dev-validate gate |
-| 022 | [022-automated-version-ladder.md](022-automated-version-ladder.md) | automated version ladder: patch per nightly merge, minor per promotion, release-bot App + post-promotion recut |
+| 022 | [022-automated-version-ladder.md](022-automated-version-ladder.md) | automated version ladder: patch per nightly merge, minor per promotion, post-promotion recut — superseded by 025 |
 | 023 | [023-ruleset-bypass-actors.md](023-ruleset-bypass-actors.md) | ruleset-only branch protection on both trunks; explicit bypass actors (owner, `github-actions[bot]` as User, release-bot App) |
 | 024 | [024-install-consent-and-banner.md](024-install-consent-and-banner.md) | installer consent plan + branded banner (channel-correct tagline, deck palette, non-interactive lanes proceed) |
+| 025 | [025-standard-release-flow.md](025-standard-release-flow.md) | standard human-bump flow: CI commits nothing to the trunks, holds no credentials; ladder retired |
