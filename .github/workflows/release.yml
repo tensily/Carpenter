@@ -334,6 +334,59 @@ jobs:
             exit 1
           fi
 
+  # Prune (adr/025): once a promotion has landed and recut fast-forwarded
+  # nightly, delete every branch head that reached nightly through a merged
+  # PR — squash/rebase merges included (selection is PR-based, not ancestry).
+  # Runs after recut so trunk provably holds everything being pruned; skips
+  # nightly/main and any branch heading an open PR (in-flight work survives).
+  # Deletions go through the release-bot App token (adr/023 bypass actor) so
+  # the job never fights the rulesets; each ref delete is a ::notice, and a
+  # missing ref is a warning, not a failure (idempotent re-runs). Also runs
+  # on workflow_dispatch (main) to retry a partial prune without re-publishing.
+  prune:
+    name: prune branches merged into nightly
+    needs: [release, recut]
+    if: >-
+      github.ref_name == 'main' &&
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
+      (needs.release.result == 'success' || needs.release.result == 'skipped') &&
+      (needs.recut.result == 'success' || needs.recut.result == 'skipped')
+    runs-on: ubuntu-latest
+    steps:
+      - name: create app token
+        uses: actions/create-github-app-token@v1
+        id: app
+        with:
+          app-id: ${{ secrets.RELEASE_BOT_APP_ID }}
+          private-key: ${{ secrets.RELEASE_BOT_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+      - name: delete merged head branches
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -eu
+          merged=$(gh pr list --repo "$REPO" --base nightly --state merged \
+            --json headRefName --jq 'map(.headRefName) | unique | .[]')
+          open=$(gh pr list --repo "$REPO" --state open \
+            --json headRefName --jq 'map(.headRefName) | unique | join(" ")')
+          keep=" nightly main $open "
+          while IFS= read -r branch; do
+            [ -n "$branch" ] || continue
+            case "$keep" in
+              *" $branch "*)
+                echo "::notice::keep $branch (trunk or head of an open PR)"
+                continue
+                ;;
+            esac
+            if gh api -X DELETE "repos/$REPO/git/refs/heads/$branch"; then
+              echo "::notice::pruned $branch (merged into nightly)"
+            else
+              echo "::warning::$branch already gone or undeletable — skipped"
+            fi
+          done <<<"$merged"
+
   # Smoke (adr/019 testing tier): verify the release artifact via the real
   # installer pipeline — tarball, checksum, install.sh, register — on a clean
   # runner, not just the repo tests (which run against a local file://

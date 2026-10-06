@@ -161,7 +161,11 @@ into `nightly`, rolling the first prerelease).
   new features) is attached. `CODEOWNERS` (`* @meolord29`) + branch protection
   make every nightly merge owner-approved.
 - **Merge green or don't merge**: ci.yml must pass on the branch head; rebase
-  onto `nightly` before merging if it has moved. Delete the branch after merge.
+  onto `nightly` before merging if it has moved. Delete the branch after merge —
+  automated by release.yml's `prune` job
+  ([adr/025](docs/adr/025-prune-merged-branches.md)), which deletes every
+  branch merged into `nightly` (PR-based; open-PR heads spared) once a
+  promotion lands and `recut` has fast-forwarded the trunk.
 - **Branch protection** ([adr/023](docs/adr/023-ruleset-bypass-actors.md) —
   rulesets-only; no classic branch protection): `nightly` + `main` each
   require a PR, code-owner review, and the checks (gates, build, smoke
