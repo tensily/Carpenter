@@ -122,6 +122,52 @@ jobs:
 
           Rollback: install any previous vX.Y.Z release the same way, substituting its tag for \`latest\`."
 
+  # Prune (adr/026): when a promotion lands, delete every branch head that
+  # reached nightly through a merged PR — squash/rebase merges included
+  # (selection is PR-based, not ancestry). PR-based selection means every
+  # pruned tip is already a commit of nightly's, so a ref delete never loses
+  # work; nightly/main and any branch heading an open PR are spared
+  # (in-flight work survives). Runs on GITHUB_TOKEN — contents:write on
+  # unprotected refs, no bypass credentials (adr/025's zero-secrets rule);
+  # each ref delete is a ::notice, and a missing ref is a warning, not a
+  # failure (idempotent re-runs). Also runs on workflow_dispatch (main) to
+  # retry a partial prune without re-publishing.
+  prune:
+    name: prune branches merged into nightly
+    needs: release
+    if: >-
+      github.ref_name == 'main' &&
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
+      (needs.release.result == 'success' || needs.release.result == 'skipped')
+    runs-on: ubuntu-latest
+    steps:
+      - name: delete merged head branches
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -eu
+          merged=$(gh pr list --repo "$REPO" --base nightly --state merged \
+            --json headRefName --jq 'map(.headRefName) | unique | .[]')
+          open=$(gh pr list --repo "$REPO" --state open \
+            --json headRefName --jq 'map(.headRefName) | unique | join(" ")')
+          keep=" nightly main $open "
+          while IFS= read -r branch; do
+            [ -n "$branch" ] || continue
+            case "$keep" in
+              *" $branch "*)
+                echo "::notice::keep $branch (trunk or head of an open PR)"
+                continue
+                ;;
+            esac
+            if gh api -X DELETE "repos/$REPO/git/refs/heads/$branch"; then
+              echo "::notice::pruned $branch (merged into nightly)"
+            else
+              echo "::warning::$branch already gone or undeletable — skipped"
+            fi
+          done <<<"$merged"
+
+
   # Smoke (adr/019 testing tier): verify the release artifact via the real
   # installer pipeline — tarball, checksum, install.sh, register — on a clean
   # runner, not just the repo tests (which run against a local file://

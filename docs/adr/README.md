@@ -29,3 +29,4 @@ sequence are retired decisions (not listed). Read topically; start with the inde
 | 023 | [023-ruleset-bypass-actors.md](023-ruleset-bypass-actors.md) | ruleset-only branch protection on both trunks; explicit bypass actors (owner, `github-actions[bot]` as User, release-bot App) |
 | 024 | [024-install-consent-and-banner.md](024-install-consent-and-banner.md) | installer consent plan + branded banner (channel-correct tagline, deck palette, non-interactive lanes proceed) |
 | 025 | [025-standard-release-flow.md](025-standard-release-flow.md) | standard human-bump flow: CI commits nothing to the trunks, holds no credentials; ladder retired |
+| 026 | [026-prune-merged-branches.md](026-prune-merged-branches.md) | `prune` job deletes branches merged into nightly (PR-based, GITHUB_TOKEN) when a promotion lands |

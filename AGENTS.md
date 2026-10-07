@@ -160,7 +160,11 @@ when the model landed (adr/021's PR merged into `nightly`).
   new features) is attached. `CODEOWNERS` (`* @meolord29`) + branch protection
   make every nightly merge owner-approved.
 - **Merge green or don't merge**: ci.yml must pass on the branch head; rebase
-  onto `nightly` before merging if it has moved. Delete the branch after merge.
+  onto `nightly` before merging if it has moved. Delete the branch after merge —
+  automated by release.yml's `prune` job
+  ([adr/026](docs/adr/026-prune-merged-branches.md)), which deletes every
+  branch merged into `nightly` (PR-based; open-PR heads spared) when a
+  promotion lands.
 - **Branch protection** ([adr/023](docs/adr/023-ruleset-bypass-actors.md),
   revised by [adr/025](docs/adr/025-standard-release-flow.md) —
   rulesets-only; no classic branch protection): `nightly` + `main` each
