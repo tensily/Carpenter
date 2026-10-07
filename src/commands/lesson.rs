@@ -1140,4 +1140,78 @@ mod tests {
             });
         assert!(kept, "learner source should be left intact without --force");
     }
+
+    fn read_nb(nb_path: &std::path::Path) -> Value {
+        serde_json::from_str(&std::fs::read_to_string(nb_path).unwrap()).unwrap()
+    }
+
+    fn managed_cells<'a>(nb: &'a Value, kind: &str) -> Vec<(usize, &'a Value)> {
+        nb["cells"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .enumerate()
+            .filter(|(_, c)| c.get("metadata").and_then(|m| m.get("managed")) == Some(&json!(kind)))
+            .collect()
+    }
+
+    #[test]
+    fn create_renders_question_md_before_prompted_stubs_only() {
+        let (paths, slug) = testutil::setup();
+        create(&paths, &slug, SPEC).unwrap();
+        let nb_path = lesson_path(&paths, &slug).join("lesson.ipynb");
+        let nb = read_nb(&nb_path);
+        // SPEC's practice has a prompt; its quiz does not.
+        let questions = managed_cells(&nb, "question-md");
+        assert_eq!(questions.len(), 1, "{questions:?}");
+        let (qi, q) = questions[0];
+        assert_eq!(q["metadata"]["practice_id"], json!("p1"));
+        assert_eq!(q["metadata"]["lesson_id"], json!("arrays-101"));
+        assert_eq!(q["cell_type"], json!("markdown"));
+        assert_eq!(q["source"], json!("sum it\n"));
+        let stubs = managed_cells(&nb, "practice-stub");
+        assert_eq!(stubs.len(), 1);
+        assert_eq!(stubs[0].0, qi + 1, "question-md must precede its stub");
+        assert!(managed_cells(&nb, "quiz-stub").iter().all(|(i, _)| {
+            nb["cells"][i - 1]
+                .get("metadata")
+                .and_then(|m| m.get("managed"))
+                != Some(&json!("question-md"))
+        }));
+    }
+
+    #[test]
+    fn sync_regenerates_question_md_and_reanchors_learner_cells() {
+        let (paths, slug) = testutil::setup();
+        create(&paths, &slug, SPEC).unwrap();
+        let nb_path = lesson_path(&paths, &slug).join("lesson.ipynb");
+        // learner drops a note right after the question cell (and defaces it —
+        // managed cells regenerate wholesale regardless)
+        let mut nb = read_nb(&nb_path);
+        let (qi, _) = managed_cells(&nb, "question-md").remove(0);
+        nb["cells"].as_array_mut().unwrap().insert(
+            qi + 1,
+            json!({"cell_type": "markdown", "metadata": {}, "source": "my note\n"}),
+        );
+        nb["cells"][qi]["source"] = json!("defaced\n");
+        std::fs::write(&nb_path, nb.to_string()).unwrap();
+
+        let Data::LessonSync { conflicts, .. } =
+            sync(&paths, &slug, "arrays-101", false).expect("sync")
+        else {
+            panic!();
+        };
+        assert!(conflicts.is_empty(), "{conflicts:?}");
+        let after = read_nb(&nb_path);
+        let mut questions = managed_cells(&after, "question-md");
+        assert_eq!(questions.len(), 1);
+        let (qi, q) = questions.remove(0);
+        assert_eq!(
+            q["source"],
+            json!("sum it\n"),
+            "question regenerated from DB"
+        );
+        // learner cell re-anchored directly after the regenerated question cell
+        assert_eq!(after["cells"][qi + 1]["source"], json!("my note\n"));
+    }
 }
