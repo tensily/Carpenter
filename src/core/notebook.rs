@@ -1,7 +1,8 @@
 //! Render a lesson notebook (DB → `.ipynb`) and define `scaffold_hash`.
 //!
-//! Render order: skip-config → title → section cells (snippets, then practice
-//! stubs + checks) → quiz stubs + checks. Every managed cell is tagged with
+//! Render order: skip-config → title → section cells (snippets, then question
+//! markdown + practice stubs + checks) → question markdown + quiz stubs +
+//! checks. Every managed cell is tagged with
 //! `metadata.managed` (+ id siblings); untagged learner cells are preserved by
 //! sync (P5). `scaffold_hash` is the FNV-1a of the canonical scaffold string and
 //! lives only in cell metadata (never the DB).
@@ -54,6 +55,11 @@ pub fn skip_config_source() -> String {
 /// The check-cell source: `helper.check("<type>", "<id>", <name>)`.
 pub fn check_source(owner_type: &str, owner_id: &str, fn_name: &str) -> String {
     format!("import helper\nhelper.check(\"{owner_type}\", \"{owner_id}\", {fn_name})\n")
+}
+
+/// The question-cell source: the full prompt verbatim (markdown allowed).
+pub fn question_source(prompt: &str) -> String {
+    format!("{}\n", prompt.trim_end())
 }
 
 fn md_cell(source: &str, managed: Value) -> Value {
@@ -125,6 +131,12 @@ pub fn render_notebook(conn: &Connection, lesson_id: &str) -> Result<Value, Carp
             }
         }
         for p in db::list_practice(conn, &sec.id)? {
+            if !p.prompt.trim().is_empty() {
+                cells.push(md_cell(
+                    &question_source(&p.prompt),
+                    json!({"managed": "question-md", "practice_id": p.id, "lesson_id": lesson_id}),
+                ));
+            }
             let scaf = canonical_scaffold(&p.signature, &p.prompt);
             let hash = stable_hash(&scaf);
             cells.push(code_cell(
@@ -139,6 +151,12 @@ pub fn render_notebook(conn: &Connection, lesson_id: &str) -> Result<Value, Carp
     }
 
     for q in db::list_quizzes(conn, lesson_id)? {
+        if !q.prompt.trim().is_empty() {
+            cells.push(md_cell(
+                &question_source(&q.prompt),
+                json!({"managed": "question-md", "quiz_id": q.id, "lesson_id": lesson_id}),
+            ));
+        }
         let scaf = canonical_scaffold(&q.signature, &q.prompt);
         let hash = stable_hash(&scaf);
         cells.push(code_cell(
@@ -192,6 +210,11 @@ pub fn managed_key(cell: &Value, mtype: &str) -> String {
             meta_str(cell, "quiz_id").unwrap_or_default()
         ),
         "check" => format!("check:{}", meta_str(cell, "target").unwrap_or_default()),
+        "question-md" => format!(
+            "question-md:{}:{}",
+            meta_str(cell, "practice_id").unwrap_or_default(),
+            meta_str(cell, "quiz_id").unwrap_or_default()
+        ),
         other => other.to_string(),
     }
 }
@@ -393,5 +416,24 @@ mod tests {
             s.contains(r#"helper.check("practice", "p1", sum_array)"#),
             "{s}"
         );
+    }
+
+    #[test]
+    fn question_source_is_prompt_with_single_trailing_newline() {
+        assert_eq!(question_source("Why?\n"), "Why?\n");
+        assert_eq!(question_source("a\nb"), "a\nb\n");
+        assert_eq!(question_source(""), "\n");
+    }
+
+    #[test]
+    fn managed_key_distinguishes_question_cells() {
+        let p1 = json!({"metadata": {"managed": "question-md", "practice_id": "p1"}});
+        let p2 = json!({"metadata": {"managed": "question-md", "practice_id": "p2"}});
+        let q1 = json!({"metadata": {"managed": "question-md", "quiz_id": "p1"}});
+        let kp1 = managed_key(&p1, "question-md");
+        assert_eq!(kp1, "question-md:p1:");
+        assert_eq!(managed_key(&q1, "question-md"), "question-md::p1");
+        assert_ne!(kp1, managed_key(&p2, "question-md"));
+        assert_ne!(kp1, managed_key(&q1, "question-md"));
     }
 }

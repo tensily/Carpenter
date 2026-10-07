@@ -9,14 +9,20 @@ managed cell tagged `metadata.managed`:
 | Skip config | `managed=skip-config, lesson_id` | regenerated from `lessons.skip` + child `skip` columns; read-only `_skip_config()` the learner/agent may call |
 | Section markdown snippet | `managed=section-md, section_id, snippet_id` | regenerated from snippet `content` |
 | Section code snippet | `managed=section-code, section_id, snippet_id` | regenerated from snippet `content` |
+| Question markdown | `managed=question-md, practice_id` *or* `quiz_id`, `lesson_id` | regenerated from the stub's `prompt` (omitted when the prompt is empty) |
 | Practice stub | `managed=practice-stub, practice_id, scaffold_hash` | preserve if learner edited |
 | Check cell | `managed=check, target=<owner_type:owner_id>` | regenerated wholesale (outputs stripped) |
 | Quiz stub | `managed=quiz-stub, quiz_id, scaffold_hash` | preserve if learner edited |
 | Learner cell | (no tag) | always preserved |
 
 Render order: skip-config cell → lesson title → section cells in array order
-(md→markdown, code→code; `snippets[0]` is always markdown) → practice stubs +
-checks → quiz stubs + checks.
+(md→markdown, code→code; `snippets[0]` is always markdown) → practice question
+markdown + stubs + checks → quiz question markdown + stubs + checks. The
+question markdown cell carries the full prompt verbatim (markdown allowed) and
+is the learner-facing copy; the stub keeps its short `# {prompt}` comment.
+`canonical_scaffold`/`scaffold_hash` cover only the stub source, so existing
+notebooks never conflict because of the question cell — it is regenerated
+wholesale on sync, like any other non-stub managed cell.
 
 ## `scaffold_hash`
 `scaffold_hash` lives **only in cell metadata**, never in the DB. It is the hash of
