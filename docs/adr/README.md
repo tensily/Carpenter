@@ -30,3 +30,4 @@ sequence are retired decisions (not listed). Read topically; start with the inde
 | 024 | [024-install-consent-and-banner.md](024-install-consent-and-banner.md) | installer consent plan + branded banner (channel-correct tagline, deck palette, non-interactive lanes proceed) |
 | 025 | [025-standard-release-flow.md](025-standard-release-flow.md) | standard human-bump flow: CI commits nothing to the trunks, holds no credentials; ladder retired |
 | 026 | [026-prune-merged-branches.md](026-prune-merged-branches.md) | `prune` job deletes branches merged into nightly (PR-based, GITHUB_TOKEN) when a promotion lands |
+| 027 | [027-ci-recut-machine-user.md](027-ci-recut-machine-user.md) | `recut` job recreates nightly at main's head post-promotion via the `tensily-release` machine user (amends 025's zero-credential rule for one ref) |

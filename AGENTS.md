@@ -138,15 +138,19 @@ fetches the Latest stable release — checksum-verified via the same pipeline �
 and refreshes registered apps' skills; `--channel nightly` opts into the canary
 (adr/018, adr/021).
 
-## Integration & release (adr/021, adr/025)
+## Integration & release (adr/021, adr/025, adr/027)
 `nightly` is the integration trunk: always green; a merge rolls the rolling
 `nightly` prerelease at that sha. `main` is the frozen release branch —
 stable `vX.Y.0` publishes only from a `nightly → main` promotion PR whose
 content carries the minor bump (human commit; `guard` checks head ==
-`nightly` and the exact version). After a promotion `nightly` stays behind
-`main`; reconcile before the next promotion by merging `main` back into
-`nightly` via a PR, then bump. Bootstrap: `nightly` was cut from `main` HEAD
-when the model landed (adr/021's PR merged into `nightly`).
+`nightly` and the exact version). The cycle is CI-driven end to end
+([adr/027](docs/adr/027-ci-recut-machine-user.md)): a promotion publish
+triggers `recut`, which force-pushes `main`'s head onto `nightly` (fresh
+trunk per release cycle; runs as the `tensily-release` machine user — the
+one bypass credential, `RECUT_TOKEN` secret, amending adr/025's
+zero-credential rule for this one ref), then `prune` sweeps merged branches
+(adr/026). Bootstrap: `nightly` was cut from `main` HEAD when the model
+landed (adr/021's PR merged into `nightly`).
 - **Short-lived branches only**: `ivan/<topic>`, target ≤1 day of work, one
   concern per branch. No long-lived branches — unfinished work lands dark
   behind the `dev` feature flag (adr/016) instead of aging on a branch. The one
