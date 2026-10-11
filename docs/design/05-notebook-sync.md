@@ -19,7 +19,8 @@ Render order: skip-config cell → lesson title → section cells in array order
 (md→markdown, code→code; `snippets[0]` is always markdown) → practice question
 markdown + stubs + checks → quiz question markdown + stubs + checks. The
 question markdown cell carries the full prompt verbatim (markdown allowed) and
-is the learner-facing copy; the stub keeps its short `# {prompt}` comment.
+is the learner-facing copy; the stub comments every prompt line (`# ` per
+line), so the scaffold is valid Python even for multi-line prompts.
 `canonical_scaffold`/`scaffold_hash` cover only the stub source, so existing
 notebooks never conflict because of the question cell — it is regenerated
 wholesale on sync, like any other non-stub managed cell.

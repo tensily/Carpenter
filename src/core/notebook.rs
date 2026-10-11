@@ -18,12 +18,25 @@ use crate::models::lesson::SnippetOut;
 use crate::models::LessonConflict;
 
 /// The canonical scaffold string for a stub (`signature` + prompt comment +
-/// `raise NotImplementedError`).
+/// `raise NotImplementedError`). Multi-line prompts are commented line by
+/// line so the scaffold stays valid Python; single-line and empty prompts
+/// keep their exact legacy bytes.
 pub fn canonical_scaffold(signature: &str, prompt: &str) -> String {
-    if prompt.trim().is_empty() {
+    let trimmed = prompt.trim();
+    if trimmed.is_empty() {
         format!("{signature}\n    raise NotImplementedError\n")
-    } else {
+    } else if !trimmed.contains('\n') {
         format!("{signature}\n    # {prompt}\n    raise NotImplementedError\n")
+    } else {
+        let comment = trimmed
+            .lines()
+            .map(|l| match l.trim_end() {
+                "" => String::from("    #"),
+                t => format!("    # {t}"),
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+        format!("{signature}\n{comment}\n    raise NotImplementedError\n")
     }
 }
 
@@ -407,6 +420,35 @@ mod tests {
         assert_eq!(h.len(), 16);
         assert!(h.chars().all(|c| c.is_ascii_hexdigit()));
         assert_eq!(h, stable_hash("def f(x):\n    raise NotImplementedError\n"));
+    }
+
+    #[test]
+    fn scaffold_comments_multi_line_prompts() {
+        let s = canonical_scaffold("def f(x):", "first line\n\nsecond line\n");
+        let lines: Vec<&str> = s.lines().collect();
+        assert_eq!(lines[0], "def f(x):");
+        assert_eq!(lines[lines.len() - 1], "    raise NotImplementedError");
+        for l in &lines[1..lines.len() - 1] {
+            assert!(l.starts_with("    #"), "uncommented scaffold line: {l:?}");
+        }
+        assert_eq!(s.lines().nth(1), Some("    # first line"));
+        assert_eq!(s.lines().nth(2), Some("    #"));
+        assert_eq!(s.lines().nth(3), Some("    # second line"));
+        assert_eq!(
+            scaffold_hash("def f(x):", "a\nb"),
+            scaffold_hash("def f(x):", "a\nb")
+        );
+    }
+
+    #[test]
+    fn scaffold_keeps_single_line_legacy_bytes() {
+        // YAML block scalars end in a newline; the single-line form (comment
+        // line + blank line) is pinned so existing notebooks' scaffold hashes
+        // stay valid on sync.
+        assert_eq!(
+            canonical_scaffold("def f(x):", "hi\n"),
+            "def f(x):\n    # hi\n\n    raise NotImplementedError\n"
+        );
     }
 
     #[test]
