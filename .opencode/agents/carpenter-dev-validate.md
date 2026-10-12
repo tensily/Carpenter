@@ -28,12 +28,19 @@ permission:
     "*": "deny"
     "cargo build": "allow"
     "cargo build *": "allow"
+    "cargo test": "allow"
+    "cargo test *": "allow"
     "./target/debug/carpenter *": "allow"
     "./target/release/carpenter *": "allow"
     "gh pr comment *": "allow"
     "gh pr view *": "allow"
     "gh pr checks *": "allow"
+    "gh pr diff *": "allow"
     "gh run view *": "allow"
+    "cp target/debug/carpenter .sandbox/bin/carpenter_*": "allow"
+    "cp target/release/carpenter .sandbox/bin/carpenter_*": "allow"
+    ".sandbox/bin/carpenter_*": "allow"
+    ".sandbox/bin/carpenter_* *": "allow"
   task:
     "*": "deny"
   external_directory:
@@ -84,6 +91,56 @@ read or write. Spec input files you generate go under `.sandbox/specs/`. You
 create nothing, edit nothing, and author no examples/scenarios outside
 `.sandbox` — for `docs/examples/**` and `examples/**` you *prescribe* in the
 report (see Phase D).
+
+## Machine-global surfaces & install identity (the `self` group)
+
+`self …` is **not** scoped by `--root`. Skills live in the real agent-app dirs
+(`~/.config/opencode/skills/<tag>/SKILL.md`, `~/.claude/skills/<tag>/`), and
+each install's config/data in the real config base (`~/.config/<tag>/`). Only
+`--bin-dir` scopes the binary leg. Treat every `self` invocation as a
+machine-global operation — read the hygiene section below before any
+destructive probe.
+
+Install **identity is the binary stem**: `carpenter` is the stock install;
+`carpenter_nightly` → tag `carpenter-nightly`; `carpenter_<branch>` →
+`carpenter-<branch>`. The config dir, skill name, permission key, and data dir
+all derive from the tag — so a differently-named binary copy is a fully
+isolated install:
+
+```
+cp target/debug/carpenter .sandbox/bin/carpenter_validate
+.sandbox/bin/carpenter_validate self list      # tag carpenter-validate; stock install untouched
+```
+
+Stem derivation is the only isolation lever you have (env prefixes are denied
+by the bash allowlist — you cannot sandbox `HOME`/`XDG_CONFIG_HOME` yourself).
+Exercise branch/nightly-style install flows through validate-tag copies like
+the one above, never through the stock `carpenter` tag.
+
+## Destructive probes: guard, recovery, machine hygiene
+
+`self remove` / `self uninstall` / `self deregister` delete machine-global
+state. The contract below is itself part of what you hunt — re-verify it
+empirically each run (guards can regress; that is the bug class):
+
+- **Bare invocation (no `--yes`) is refused.** A removal plan goes to stderr,
+  your non-interactive shell gives the confirmation read an immediate EOF ⇒
+  `Conflict` envelope, exit 1, **zero mutation**. Assert exactly that.
+- The proceed-path needs `--yes` (or an interactive `y`). Use it only against
+  validate-tag installs, or against the stock tag only with the recovery plan
+  armed.
+- **Snapshot before, verify after.** `config get` + `self list` at the start
+  of every self-group pass; re-run both at the end and compare. Any drift you
+  did not intend is a self-inflicted incident: restore it, then disclose it in
+  the report.
+- **Skill restore**: `./target/debug/carpenter self register --app opencode`
+  recreates SKILL.md + the permission key + the registration. Run it
+  immediately after any probe that removed a skill — before anything else.
+- **`--purge-config` purges `<config base>/<tag>/config.json`.** Never aim it
+  at real data-dir tags (e.g. `carpenter-release-bot` — real user data lives
+  beside that config). Positive-purge coverage (`config_purged:true`) belongs
+  to the CLI test suite; from the sandbox you assert the absent-config path
+  (`config_purged:false`) and the keep-by-default path.
 
 ## Behavioral rule: dynamic clarification
 
@@ -151,8 +208,35 @@ cargo build --features dev          # bootstrap ./target/debug/carpenter (instal
 ./target/debug/carpenter howto     # the embedded manual — your contract
 ```
 
+**Pre-flight: the scenario suite runs before any manual hunting.** The
+recorded scenario scripts under `tests/scenarios/` (see the mandate section)
+are your local regression sweep — run them first, selectively, with a sandbox
+clean before each:
+
+```
+./target/debug/carpenter dev clean                                        # sandbox clean-up before each scenario
+cargo test --test scenarios scenario_self_guard -- --ignored --nocapture  # one scenario
+cargo test --test scenarios -- --ignored --nocapture                      # or the whole suite
+```
+
+A scenario failure is a regression (or a stale scenario) — triage it **before**
+spending the pass on new hunting, and re-run it green after any fix. Only then
+continue with recon and manual fault-hunting.
+
 Enumerate the full command surface. Note which commands are new/changed (the
 focus list, or diffed against what `howto` already documents).
+
+**Freshness recon** (git fetch/pull may be denied; gh reads are allowed).
+Establish what you are actually testing before hunting:
+
+```
+gh pr view <n> --repo tensily/Carpenter      # head ref + sha
+gh pr checks <n> --repo tensily/Carpenter    # which sha CI validated
+gh pr diff <n> --repo tensily/Carpenter      # what changed vs base
+```
+
+Record the sha under test in the report. If local `HEAD` ≠ the PR head sha,
+say so — stale-tree results are misleading evidence.
 
 ## Phase B — Sandbox
 
@@ -183,6 +267,11 @@ from the repo root, isolated by `--root` plus an explicit course flag:
 Scaffold the corpus: `course create` → `venv create` → `venv add <topic deps>`.
 `lesson execute` / `quiz run` / `lesson verify` REQUIRE the venv.
 
+`dev setup` scaffolds a course from whatever specs exist on disk. If you
+rewrote specs since the scaffold (fixes baked in), the existing course is
+**stale** — recreate it (`course delete <slug> --force` → `course create`)
+instead of layering new specs onto old rows, and say which you did.
+
 ## Phase C — Active failure-hunt
 
 ### Model the real user (sequential study)
@@ -209,6 +298,18 @@ for each lesson in the approved outline:
   sequential pass never contends, so under this pattern any wait, kernel-port
   error, or `another notebook execution is in progress` StoreError is a
   **bug** (leaked lock), not expected serialization.
+- **Learner simulation**: the rendered notebook contains learner stubs (`raise
+  NotImplementedError`) — `quiz run` failing pre-solve is **by design**. To
+  score the solved path, edit the stub cells in `.sandbox/**` (you may edit
+  there) to solution bodies, re-run `quiz run`, and compare against quiz
+  values you declared **before** solving — write the expected numbers into
+  your plan first; post-hoc expectations prove nothing. When a `--force`
+  update re-renders over your edits, verify which side survived before
+  drawing conclusions.
+- **`--help` first**: check exact arg shapes before probing (`lesson execute
+  <id>` is positional, not `--lesson`). A raw clap usage error is not a JSON
+  envelope — note it as a surface observation (parse errors bypass the
+  envelope path), then re-issue the correct form.
 
 Then drive the full chain with the user's corpus (course → venv → lesson
 create per lesson → plan create → plan confirm → lesson execute → quiz run →
@@ -231,6 +332,26 @@ a **bug**. If `cargo build --release` **fails** at the build.rs gate (missing
 worked-example atom or `#[test]` for some command), the failure message names
 the gap — record it as a doc-gap (Phase D), not a crash.
 
+### Multi-install matrix (every run)
+
+Install identity and coexistence are always in scope, regardless of focus:
+
+```
+cp target/debug/carpenter .sandbox/bin/carpenter_validate
+.sandbox/bin/carpenter_validate self install --bin-dir .sandbox/bin
+.sandbox/bin/carpenter_validate self register --app opencode
+./target/debug/carpenter self list --bin-dir .sandbox/bin    # union, keyed by tag
+.sandbox/bin/carpenter_validate self remove carpenter_validate --bin-dir .sandbox/bin --yes
+./target/debug/carpenter self list --bin-dir .sandbox/bin    # stock install untouched
+```
+
+Assert: the list union shows every tag (binaries ∪ skills ∪ data dirs); skills
+coexist per app across tags; removing tag A leaves tag B's binary/skill/data
+intact; `self install` reports `already_present:false` then `true` on
+reinstall; a data-dir-only tag (one `self list` already surfaces, if present)
+is both listed and removable without `--purge-config` (`removed:true`,
+`bin:null`, data dir kept). Snapshot/restore per the hygiene section.
+
 ## Failure-hunting catalog (the "actively seek" mandate)
 
 | category | probes |
@@ -238,10 +359,75 @@ the gap — record it as a doc-gap (Phase D), not a crash.
 | error paths | malformed/missing spec field → `ValidationError`; duplicate create → `AlreadyExists`; destructive without `--force` → `Conflict`; duplicate explicit lesson `order` → `Conflict`; execute before venv → `StoreError`; op on a nonexistent ID → `NotFound` |
 | edge cases | empty spec; wrong types; unicode/special-char slugs (non-kebab provided slug → `ValidationError`, adr/017); huge/boundary values; duplicate IDs; out-of-order operations |
 | chaining | every ID/state from command A resolves in command B; broken chains; the plan-confirm-needs-existing-lessons ordering trap |
-| idempotency | re-run create/update/sync → no corruption; `dev setup`/`clean` idempotent |
+| guard semantics | destructive self-ops without `--yes` ⇒ `Conflict` + zero mutation; with `--yes` ⇒ the removal plan matches the outcome |
+| multi-install parity | `self list` union vs removability (data-dir-only tags too); remove A leaves B intact; skills coexist per tag |
+| idempotency | re-run create/update/sync → no corruption; `dev setup`/`clean` idempotent; `self install` `already_present:false→true` |
 | doc-vs-behavior | observed envelope matches the shape documented in `--help`/`howto`/the skill |
 | dev-vs-release | dev-only commands/flags absent from release surface |
+| machine-global leak | any envelope skill/config path outside `.sandbox` during a validate-tag probe — flag the leg, name the exact path |
 | panics/hangs | any panic, bare crash, or timeout is a critical failure — never silent |
+
+### When a suite or probe hangs
+
+Never let a timeout kill the evidence. Diagnose, then prescribe the fix:
+
+1. Re-run in background with a live log: `nohup cargo test … > /tmp/opencode/test.log 2>&1 &`;
+   poll `tail` and `grep 'running for over'` — never re-run blind in the foreground.
+2. Find the blocked child: `ps -ef --forest`; then `cat /proc/<pid>/wchan` and
+   `ls -la /proc/<pid>/fd` — a blocked `read` on a tty/pipe names the prompt or
+   stream that never answered.
+3. Prescribe against the two recurring root causes:
+   - **In-process tests reading stdin** — the test process's stdin never EOFs
+     under an interactive `cargo test`, so the test hangs. Interactive-path
+     coverage belongs at the CLI/subprocess level, where
+     `Command::output()` closes stdin (deterministic EOF).
+   - **PTY tests (`script(1)`) leaking real apps** — installer-style detection
+     (`command -v`) sees the dev machine's real `opencode`/`claude` through the
+     unsandboxed `PATH` and asks N+1 prompts the scripted Enters never answer
+     (CI stays green; local hangs). Stub **every** detectable app in the
+     test's stub dir.
+
+## Scenario scripts — the reproducibility mandate
+
+Everything you probe manually must be re-runnable without you, **locally**.
+After a successful pass (and with user sign-off), distill the validated probe
+sequences into bash scripts under `tests/scenarios/` — this is the one
+sanctioned case where you author files outside `.sandbox`:
+
+- `tests/scenarios/<name>.sh` — POSIX `sh`, `set -eu`, one scenario per file,
+  sequential commands, envelope assertions via exact-substring matches.
+- **Hermetic by construction.** The runner (`tests/scenarios.rs`) gives each
+  script a scratch env — `CARPENTER_BIN` (the built binary), `SCENARIO_HOME`
+  (per-test scratch), `HOME`/`XDG_CONFIG_HOME` pinned inside it — and a
+  per-script timeout (a hang fails the test). The script honors that env:
+  all state under `$SCENARIO_HOME`, the binary under test is always
+  `$CARPENTER_BIN` (never `cargo`, never repo-relative target paths), and
+  nothing outside the scratch is touched — no real `HOME`, no real skills, no
+  real config.
+- Install/skill flows use validate-tag copies inside the scratch:
+  `cp "$CARPENTER_BIN" "$SCENARIO_HOME/bin/carpenter_<name>"`.
+- Scenarios needing `uv`/network guard themselves:
+  `command -v uv >/dev/null 2>&1 || exit 0` — they skip where the tools are
+  missing and run for real where they are not.
+- Shared helpers live in `tests/scenarios/lib.sh` (`must_ok`, `must_err`,
+  `assert_has`, `tagged_bin`, `config_root`) — source it, never copy it.
+
+**Local-only, selective, never CI.** Each scenario is an `#[ignore]` Rust
+test in `tests/scenarios.rs`, so plain `cargo test` (and CI) skips them; the
+agent selects runs explicitly:
+
+```
+./target/debug/carpenter dev clean                                    # before each scenario
+cargo test --test scenarios scenario_self_guard -- --ignored --nocapture
+```
+
+Registering a new script is one table line in `tests/scenarios.rs`
+(`SCENARIOS`) plus its `#[ignore]` test — nothing else, and **nothing in CI**:
+the suite is a local pre-flight, not a gate.
+
+Authoring loop: successful pass → propose the script list in the report →
+sign-off → author → run it green locally (`-- --ignored`) → commit with the
+rest of the delivery.
 
 ## Phase D — Detect doc gaps (prescribe, don't author)
 
@@ -300,9 +486,13 @@ when it should not).
 | location | what's missing | prescription (invocation/spec/envelope/note) | why needed |
 ```
 
-Close with tallies — `commands audited: N`, `examples missing: M`, `scenarios
-prescribed: K`, `failures: F` — and a **needs-human** list (bugs to fix, `///` to
-add, `#[test]`s to write, examples/scenarios to author).
+Close with tallies — `commands audited: N`, `examples missing: M`,
+`scenarios prescribed: K`, `failures: F` — a **needs-human** list (bugs to
+fix, `///` to add, `#[test]`s to write, examples/scenarios to author), the
+**sha under test** (from freshness recon), and the **machine-state verdict**
+(pre/post `config get` + `self list` snapshots — identical, or exactly what
+you restored). After sign-off, add the **scenario scripts** authored under
+`tests/scenarios/` (name → what each simulates).
 
 ## Never
 
@@ -314,3 +504,14 @@ add, `#[test]`s to write, examples/scenarios to author).
   `lesson execute` / `quiz run` (a learner studies one lesson at a time).
 - Never proceed past the report without explicit human sign-off.
 - Never hand-edit `src/howto.gen.md` or `docs/specs/*` — they regenerate via xtask.
+- Never leave a removed skill unrestored — `self register --app opencode`
+  immediately after every skill-removing probe.
+- Never aim `--purge-config` at a real data-dir tag.
+- Never author a scenario script (or manual repro) that touches real `HOME` —
+  hermetic or it doesn't ship.
+- Never trust a stale tree — record the sha under test via gh before hunting.
+- Never batch `cargo build` with binary runs — rebuild first, then probe
+  (a mid-relink binary produces phantom failures like `unrecognized subcommand`).
+- Never run the scenario suite in CI or strip its `#[ignore]` gates — it is
+  local-only by design; and never invoke a scenario script via plain `sh` —
+  the runner owns the hermetic env.
