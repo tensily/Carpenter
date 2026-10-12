@@ -1316,10 +1316,11 @@ Replace the installed binary from a published release (or a source checkout) and
 
 ### uninstall
 
-Remove the carpenter skill, the installed binary, and (with --purge-config) the config.
+Remove the carpenter skill, the installed binary, and (with --purge-config) the config. Prints a removal plan and asks for confirmation; --yes skips.
 
 - `--bin-dir <PATH>` — Bin dir (default: config bin_dir -> ~/.local/bin).
 - `--purge-config` — Also remove the carpenter config file.
+- `--yes` — Skip the confirmation prompt (non-interactive removal).
 
 ### register
 
@@ -1330,9 +1331,10 @@ Register the carpenter skill with an agent app (writes SKILL.md; opencode also g
 
 ### deregister
 
-Deregister the carpenter skill (removes SKILL.md; opencode also loses its permission entry).
+Deregister the carpenter skill (removes SKILL.md; opencode also loses its permission entry). Prints a plan and asks for confirmation; --yes skips.
 
 - `--app` — Agent app (opencode|claude-code).
+- `--yes` — Skip the confirmation prompt (non-interactive removal).
 
 ### list
 
@@ -1342,10 +1344,11 @@ List carpenter installs on this machine (binaries, skills, data dirs).
 
 ### remove
 
-Uninstall any carpenter install by tag (skill + binary + config purge).
+Uninstall any carpenter install by tag (skill + binary + config purge). Prints a removal plan and asks for confirmation; --yes skips.
 
 - `--bin-dir <PATH>` — Bin dir (default: config bin_dir -> ~/.local/bin).
 - `--purge-config` — Also remove the target install's config file.
+- `--yes` — Skip the confirmation prompt (non-interactive removal).
 
 ### link
 

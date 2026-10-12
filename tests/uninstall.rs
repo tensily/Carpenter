@@ -96,6 +96,7 @@ fn uninstall_self_deletes_running_binary() {
     let (ok, env) = run(sandboxed(&bin, &root)
         .arg("self")
         .arg("uninstall")
+        .arg("--yes")
         .arg("--bin-dir")
         .arg(bin.parent().unwrap()));
     assert!(ok, "{env}");
@@ -130,6 +131,7 @@ fn uninstall_twice_is_notfound() {
     let (ok, _) = run(sandboxed(&bin, &root)
         .arg("self")
         .arg("uninstall")
+        .arg("--yes")
         .arg("--bin-dir")
         .arg(&bin_dir));
     assert!(ok);
@@ -139,6 +141,7 @@ fn uninstall_twice_is_notfound() {
     let (ok, env) = run(sandboxed(Path::new(carpenter_bin()), &root)
         .arg("self")
         .arg("uninstall")
+        .arg("--yes")
         .arg("--bin-dir")
         .arg(&bin_dir));
     assert!(!ok, "{env}");
@@ -161,12 +164,17 @@ fn uninstall_purges_config_with_flag() {
     let (ok, env) = run(sandboxed(&bin, &root)
         .arg("self")
         .arg("uninstall")
+        .arg("--yes")
         .arg("--bin-dir")
         .arg(&bin_dir)
         .arg("--purge-config"));
     assert!(ok, "{env}");
     assert_eq!(env["data"]["config_purged"], true, "{env}");
     assert!(!tagged_cfg.exists(), "tagged config purged");
+    assert!(
+        config_file(&root).is_file(),
+        "the calling stock install's config survives (purge targets the removed tag only)"
+    );
 
     let _ = std::fs::remove_dir_all(&root);
 }
@@ -178,7 +186,8 @@ fn uninstall_notfound_with_default_bin_dir_when_nothing_installed() {
 
     let (ok, env) = run(sandboxed(Path::new(carpenter_bin()), &root)
         .arg("self")
-        .arg("uninstall"));
+        .arg("uninstall")
+        .arg("--yes"));
     assert!(!ok, "{env}");
     assert_eq!(env["code"], "NotFound", "{env}");
 
@@ -249,6 +258,7 @@ fn install_sh_then_uninstall_reverses_footprint() {
     let (ok, env) = run(sandboxed(&bin, &root)
         .arg("self")
         .arg("uninstall")
+        .arg("--yes")
         .arg("--bin-dir")
         .arg(&bin_dir));
     assert!(ok, "{env}");
@@ -332,6 +342,7 @@ fn install_sh_detects_and_registers_claude_code() {
     let (ok, env) = run(sandboxed(&bin, &root)
         .arg("self")
         .arg("uninstall")
+        .arg("--yes")
         .arg("--bin-dir")
         .arg(&bin_dir));
     assert!(ok, "{env}");
@@ -340,6 +351,147 @@ fn install_sh_detects_and_registers_claude_code() {
 
     let _ = std::fs::remove_dir_all(&root);
     let _ = std::fs::remove_dir_all(&fixture);
+}
+
+/// Without `--yes` and with no interactive stdin (`Command::output` closes it),
+/// the confirmation reads EOF and the removal aborts with a `Conflict`
+/// envelope — and nothing is removed (adr/019 revision).
+#[test]
+fn uninstall_without_yes_aborts_when_non_interactive() {
+    let root = setup("uninstall-noconfirm");
+    let bin = install_copy(&root);
+    let (skill_md, _) = opencode_paths(&root);
+    let (ok, env) = run(sandboxed(&bin, &root)
+        .arg("self")
+        .arg("register")
+        .arg("--app")
+        .arg("opencode"));
+    assert!(ok, "{env}");
+
+    let (ok, env) = run(sandboxed(&bin, &root)
+        .arg("self")
+        .arg("uninstall")
+        .arg("--bin-dir")
+        .arg(bin.parent().unwrap()));
+    assert!(!ok, "{env}");
+    assert_eq!(env["status"], "error", "{env}");
+    assert_eq!(env["code"], "Conflict", "{env}");
+    assert!(bin.exists(), "binary untouched without confirmation");
+    assert!(skill_md.exists(), "skill untouched without confirmation");
+
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// Same non-interactive abort for the `remove` and `deregister` surfaces —
+/// the whole destructive self-group shares the confirmation contract.
+#[test]
+fn remove_and_deregister_abort_without_yes_when_non_interactive() {
+    let root = setup("remove-noconfirm");
+    let bin = install_copy(&root);
+    let (skill_md, _) = opencode_paths(&root);
+    let (ok, env) = run(sandboxed(&bin, &root)
+        .arg("self")
+        .arg("register")
+        .arg("--app")
+        .arg("opencode"));
+    assert!(ok, "{env}");
+
+    let (ok, env) = run(sandboxed(&bin, &root)
+        .arg("self")
+        .arg("remove")
+        .arg("carpenter-nightly")
+        .arg("--bin-dir")
+        .arg(bin.parent().unwrap()));
+    assert!(!ok, "{env}");
+    assert_eq!(env["code"], "Conflict", "{env}");
+    assert!(bin.exists(), "binary untouched without confirmation");
+    assert!(skill_md.exists(), "skill untouched without confirmation");
+
+    let (ok, env) = run(sandboxed(&bin, &root)
+        .arg("self")
+        .arg("deregister")
+        .arg("--app")
+        .arg("opencode"));
+    assert!(!ok, "{env}");
+    assert_eq!(env["code"], "Conflict", "{env}");
+    assert!(skill_md.exists(), "skill untouched without confirmation");
+
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// A piped explicit `y` satisfies the confirmation — the interactive path,
+/// driven through stdin (`remove` variant).
+#[test]
+fn remove_accepts_piped_confirmation() {
+    use std::io::Write;
+    use std::process::Stdio;
+
+    let root = setup("remove-piped-yes");
+    let bin = install_copy(&root);
+    let (skill_md, _) = opencode_paths(&root);
+    let (ok, env) = run(sandboxed(&bin, &root)
+        .arg("self")
+        .arg("register")
+        .arg("--app")
+        .arg("opencode"));
+    assert!(ok, "{env}");
+
+    let mut child = sandboxed(&bin, &root)
+        .arg("self")
+        .arg("remove")
+        .arg("carpenter-nightly")
+        .arg("--bin-dir")
+        .arg(bin.parent().unwrap())
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    child.stdin.take().unwrap().write_all(b"y\n").unwrap();
+    let out = child.wait_with_output().unwrap();
+    assert!(
+        out.status.success(),
+        "{}{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let env: Value = serde_json::from_str(String::from_utf8_lossy(&out.stdout).trim()).unwrap();
+    assert_eq!(env["status"], "ok", "{env}");
+    assert_eq!(env["data"]["removed"], true, "{env}");
+    assert!(!bin.exists(), "binary removed after piped confirmation");
+    assert!(!skill_md.exists(), "skill removed after piped confirmation");
+
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// `--purge-config` on `self remove <tag>` purges the removed tag's config —
+/// never the calling install's (adr/019 revision).
+#[test]
+fn remove_purges_only_the_target_tags_config() {
+    let root = setup("remove-purge-target");
+    let bin = install_copy(&root);
+    let tagged_cfg = tagged_config_file(&root);
+    std::fs::create_dir_all(tagged_cfg.parent().unwrap()).unwrap();
+    std::fs::write(&tagged_cfg, br#"{"bin_dir":"/nonexistent-default"}"#).unwrap();
+    write_config(&root);
+
+    let (ok, env) = run(sandboxed(&bin, &root)
+        .arg("self")
+        .arg("remove")
+        .arg("carpenter-nightly")
+        .arg("--yes")
+        .arg("--bin-dir")
+        .arg(bin.parent().unwrap())
+        .arg("--purge-config"));
+    assert!(ok, "{env}");
+    assert_eq!(env["data"]["config_purged"], true, "{env}");
+    assert!(!tagged_cfg.exists(), "tagged config purged");
+    assert!(
+        config_file(&root).is_file(),
+        "the calling stock install's config survives"
+    );
+
+    let _ = std::fs::remove_dir_all(&root);
 }
 
 fn unix_chmod(path: &Path) {

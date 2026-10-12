@@ -8,21 +8,28 @@
 //! mechanics live in [`core::installs`](crate::core::installs) — shared with
 //! `installs remove`.
 
+use crate::core::confirm;
 use crate::core::error::CarpenterError;
 use crate::core::installs;
 use crate::core::store::Paths;
 use crate::models::Data;
 
-/// `uninstall [--bin-dir <p>] [--purge-config]`. `name` is the install tag
-/// (adr/027) — the caller resolves it via
+/// `uninstall [--bin-dir <p>] [--purge-config] [--yes]`. `name` is the install
+/// tag (adr/027) — the caller resolves it via
 /// [`store::install_name`](crate::core::store::install_name); the binary name,
-/// skill dirs, and permission keys all derive from it.
+/// skill dirs, and permission keys all derive from it. Prints the removal plan
+/// and asks for confirmation unless `--yes` (adr/019 revision); a declined or
+/// absent confirmation stream is a `Conflict` error envelope.
 pub fn uninstall(
     paths: &Paths,
     bin_dir: Option<&str>,
     purge_config: bool,
+    yes: bool,
     name: &str,
 ) -> Result<Data, CarpenterError> {
+    if !yes {
+        confirm::confirm(&installs::removal_plan(paths, bin_dir, purge_config, name)?)?;
+    }
     let r = installs::remove(paths, bin_dir, purge_config, name)?;
     Ok(Data::Uninstall {
         uninstalled: true,
@@ -53,8 +60,14 @@ mod tests {
             bin: removed_bin,
             skill,
             config_purged,
-        } = uninstall(&paths, Some(bin_dir.to_str().unwrap()), false, "carpenter")
-            .expect("uninstall")
+        } = uninstall(
+            &paths,
+            Some(bin_dir.to_str().unwrap()),
+            false,
+            true,
+            "carpenter",
+        )
+        .expect("uninstall")
         else {
             panic!("Uninstall");
         };
@@ -75,10 +88,14 @@ mod tests {
         let bin_dir = paths.root.join("bin");
         std::fs::create_dir_all(&bin_dir).unwrap();
         std::fs::write(bin_dir.join("carpenter"), b"fake binary").unwrap();
-        let Data::Uninstall { skill, bin, .. } =
-            uninstall(&paths, Some(bin_dir.to_str().unwrap()), false, "carpenter")
-                .expect("uninstall")
-        else {
+        let Data::Uninstall { skill, bin, .. } = uninstall(
+            &paths,
+            Some(bin_dir.to_str().unwrap()),
+            false,
+            true,
+            "carpenter",
+        )
+        .expect("uninstall") else {
             panic!("Uninstall");
         };
         assert_eq!(skill["removed"], json!(false));
@@ -94,10 +111,14 @@ mod tests {
             .expect("register");
         let bin_dir = paths.root.join("empty-bin");
         std::fs::create_dir_all(&bin_dir).unwrap();
-        let Data::Uninstall { bin, skill, .. } =
-            uninstall(&paths, Some(bin_dir.to_str().unwrap()), false, "carpenter")
-                .expect("uninstall")
-        else {
+        let Data::Uninstall { bin, skill, .. } = uninstall(
+            &paths,
+            Some(bin_dir.to_str().unwrap()),
+            false,
+            true,
+            "carpenter",
+        )
+        .expect("uninstall") else {
             panic!("Uninstall");
         };
         assert!(bin.is_none(), "no binary was present");
@@ -112,8 +133,14 @@ mod tests {
         let paths = testutil::meta_setup();
         let bin_dir = paths.root.join("bin");
         std::fs::create_dir_all(&bin_dir).unwrap();
-        let err =
-            uninstall(&paths, Some(bin_dir.to_str().unwrap()), false, "carpenter").unwrap_err();
+        let err = uninstall(
+            &paths,
+            Some(bin_dir.to_str().unwrap()),
+            false,
+            true,
+            "carpenter",
+        )
+        .unwrap_err();
         assert!(matches!(err, CarpenterError::NotFound(_)), "{err:?}");
         let _ = std::fs::remove_dir_all(&paths.root);
     }
@@ -125,8 +152,14 @@ mod tests {
             .expect("register");
         let bin_dir = paths.root.join("bin");
         std::fs::create_dir_all(bin_dir.join("carpenter")).unwrap();
-        let err =
-            uninstall(&paths, Some(bin_dir.to_str().unwrap()), false, "carpenter").unwrap_err();
+        let err = uninstall(
+            &paths,
+            Some(bin_dir.to_str().unwrap()),
+            false,
+            true,
+            "carpenter",
+        )
+        .unwrap_err();
         assert!(matches!(err, CarpenterError::StoreError(_)), "{err:?}");
         let _ = std::fs::remove_dir_all(&paths.root);
     }
@@ -142,19 +175,27 @@ mod tests {
             std::fs::create_dir_all(parent).unwrap();
         }
         std::fs::write(&cfg, b"{}").unwrap();
-        let Data::Uninstall { config_purged, .. } =
-            uninstall(&paths, Some(bin_dir.to_str().unwrap()), false, "carpenter")
-                .expect("keep config")
-        else {
+        let Data::Uninstall { config_purged, .. } = uninstall(
+            &paths,
+            Some(bin_dir.to_str().unwrap()),
+            false,
+            true,
+            "carpenter",
+        )
+        .expect("keep config") else {
             panic!("Uninstall");
         };
         assert!(!config_purged);
         assert!(cfg.exists(), "config must survive without --purge-config");
         std::fs::write(bin_dir.join("carpenter"), b"fake binary").unwrap();
-        let Data::Uninstall { config_purged, .. } =
-            uninstall(&paths, Some(bin_dir.to_str().unwrap()), true, "carpenter")
-                .expect("purge config")
-        else {
+        let Data::Uninstall { config_purged, .. } = uninstall(
+            &paths,
+            Some(bin_dir.to_str().unwrap()),
+            true,
+            true,
+            "carpenter",
+        )
+        .expect("purge config") else {
             panic!("Uninstall");
         };
         assert!(config_purged);
@@ -172,10 +213,14 @@ mod tests {
         let bin_dir = paths.root.join("bin");
         std::fs::create_dir_all(&bin_dir).unwrap();
         std::fs::write(bin_dir.join("carpenter"), b"fake binary").unwrap();
-        let Data::Uninstall { skill, .. } =
-            uninstall(&paths, Some(bin_dir.to_str().unwrap()), false, "carpenter")
-                .expect("uninstall")
-        else {
+        let Data::Uninstall { skill, .. } = uninstall(
+            &paths,
+            Some(bin_dir.to_str().unwrap()),
+            false,
+            true,
+            "carpenter",
+        )
+        .expect("uninstall") else {
             panic!("Uninstall");
         };
         let arr = skill.as_array().expect("per-app outcomes");
@@ -208,6 +253,7 @@ mod tests {
             &paths,
             Some(bin_dir.to_str().unwrap()),
             false,
+            true,
             "carpenter-ivan-topic",
         )
         .expect("uninstall")

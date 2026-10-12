@@ -20,6 +20,12 @@ claude-code into `~/.claude/skills/` with no permission merge), `agents` ⇒
 `opencode` — it is never an interactive TTY prompt (an agent cannot answer one;
 see [01-envelope.md](01-envelope.md) `--force` policy).
 
+`self deregister` is destructive (it removes the machine-global skill an app
+reads), so it prints a plan (skill path + permission key) to stderr and
+confirms on stdin unless `--yes` — same contract as `self remove`/`self
+uninstall` ([adr/019](../adr/019-uninstall-semantics.md) revision): decline or
+EOF ⇒ `Conflict`, nothing removed.
+
 The `SKILL.md` body is assembled from typed fields in `core/skill.rs` — no
 template ([adr/009](../adr/009-skill-assembled-from-fields.md)). `self register
 --print-skill` emits the rendered bytes; a determinism + frontmatter-validation

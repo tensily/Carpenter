@@ -28,7 +28,8 @@ pub enum CarpenterError {
         /// structured payload — `{index,ename,evalue}` or `{errors:[…]}`.
         details: serde_json::Value,
     },
-    /// Destructive op attempted without `--force`, or unresolvable sync conflict.
+    /// Destructive op not confirmed (`--force` gate, declined or unavailable
+    /// confirmation prompt), or unresolvable sync conflict.
     #[error("conflict: {0}")]
     Conflict(String),
 }

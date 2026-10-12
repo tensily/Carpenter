@@ -1,7 +1,7 @@
 **example:**
 
 ```sh
-carpenter self remove carpenter-ivan-topic
+carpenter self remove carpenter-ivan-topic --yes
 ```
 
 Result (one envelope on stdout):
@@ -13,5 +13,7 @@ Generic uninstall: removes **any** install by tag — the tagged binary, its
 skill from every app that registered it, and (with `--purge-config`) its
 config file — regardless of which carpenter is running the command. Same
 adr/019 semantics as `uninstall` (course data is never touched; `NotFound`
-when the tag has neither skill nor binary); the tag must be kebab-case
-(`^[a-z0-9]+(-[a-z0-9]+)*$`, max 60).
+when the tag has no skill, binary, **or** data dir); the tag must be
+kebab-case (`^[a-z0-9]+(-[a-z0-9]+)*$`, max 60). Without `--yes` a removal
+plan is printed to stderr and confirmed on stdin — decline or EOF ⇒
+`Conflict`, nothing removed.

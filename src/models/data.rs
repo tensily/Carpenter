@@ -557,6 +557,8 @@ pub enum Data {
     Install {
         /// always true.
         installed: bool,
+        /// whether the target binary already existed (re-install over an old copy).
+        already_present: bool,
         /// installed binary path.
         bin: String,
         /// whether `bin_dir` is on `$PATH`.

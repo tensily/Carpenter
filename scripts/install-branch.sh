@@ -58,7 +58,9 @@ detect_apps() {
 if [ "$UNINSTALL" = yes ]; then
     [ -x "$BIN" ] || die "no tagged install at $BIN"
     say "uninstalling $BIN_NAME (binary, skill, data dir)"
-    "$BIN" self uninstall || say "note: CLI uninstall reported an error; continuing"
+    # --yes: the script itself is the consent (the human passed --uninstall);
+    # the CLI's plan/confirm gate is for bare invocations
+    "$BIN" self uninstall --yes || say "note: CLI uninstall reported an error; continuing"
     data_dir="${XDG_CONFIG_HOME:-${HOME}/.config}/$TAG"
     [ "$(uname -s)" = Darwin ] && data_dir="${HOME}/Library/Application Support/$TAG"
     if [ -d "$data_dir" ]; then
@@ -126,4 +128,4 @@ fi
 say "installed $BIN"
 say "data dir: $data_dir (isolated from the stock install)"
 say "caveat: never run '$BIN_NAME self upgrade' — it would pull stable bits under this branch tag"
-say "remove with: scripts/install-branch.sh --uninstall  (or: carpenter self remove $TAG)"
+say "remove with: scripts/install-branch.sh --uninstall  (or: carpenter self remove $TAG --yes)"

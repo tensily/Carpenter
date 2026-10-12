@@ -303,5 +303,5 @@ jobs:
           set -eu
           BIN="$CARPENTER_INSTALL_DIR/carpenter"
           test -x "$BIN" || BIN="$CARPENTER_INSTALL_DIR/carpenter_nightly"
-          "$BIN" self uninstall --bin-dir "$CARPENTER_INSTALL_DIR" | grep '"status":"ok"'
+          "$BIN" self uninstall --yes --bin-dir "$CARPENTER_INSTALL_DIR" | grep '"status":"ok"'
           test ! -e "$BIN"

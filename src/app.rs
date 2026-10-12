@@ -386,6 +386,13 @@ fn force_arg() -> Arg {
         .help("Confirm the destructive operation.")
 }
 
+fn yes_arg() -> Arg {
+    Arg::new("yes")
+        .long("yes")
+        .action(ArgAction::SetTrue)
+        .help("Skip the confirmation prompt (non-interactive removal).")
+}
+
 fn progress_group() -> Command {
     Command::new("progress")
         .about("Progress commands.")
@@ -532,7 +539,7 @@ fn self_group() -> Command {
         )
         .subcommand(
             Command::new("uninstall")
-                .about("Remove the carpenter skill, the installed binary, and (with --purge-config) the config.")
+                .about("Remove the carpenter skill, the installed binary, and (with --purge-config) the config. Prints a removal plan and asks for confirmation; --yes skips.")
                 .arg(
                     Arg::new("bin-dir")
                         .long("bin-dir")
@@ -544,7 +551,8 @@ fn self_group() -> Command {
                         .long("purge-config")
                         .action(ArgAction::SetTrue)
                         .help("Also remove the carpenter config file."),
-                ),
+                )
+                .arg(yes_arg()),
         )
         .subcommand(
             Command::new("register")
@@ -564,13 +572,14 @@ fn self_group() -> Command {
         )
         .subcommand(
             Command::new("deregister")
-                .about("Deregister the carpenter skill (removes SKILL.md; opencode also loses its permission entry).")
+                .about("Deregister the carpenter skill (removes SKILL.md; opencode also loses its permission entry). Prints a plan and asks for confirmation; --yes skips.")
                 .arg(
                     Arg::new("app")
                         .long("app")
                         .default_value("opencode")
                         .help("Agent app (opencode|claude-code)."),
-                ),
+                )
+                .arg(yes_arg()),
         )
         .subcommand(
             Command::new("list")
@@ -584,7 +593,7 @@ fn self_group() -> Command {
         )
         .subcommand(
             Command::new("remove")
-                .about("Uninstall any carpenter install by tag (skill + binary + config purge).")
+                .about("Uninstall any carpenter install by tag (skill + binary + config purge). Prints a removal plan and asks for confirmation; --yes skips.")
                 .arg(
                     Arg::new("tag")
                         .value_name("TAG")
@@ -602,7 +611,8 @@ fn self_group() -> Command {
                         .long("purge-config")
                         .action(ArgAction::SetTrue)
                         .help("Also remove the target install's config file."),
-                ),
+                )
+                .arg(yes_arg()),
         )
         .subcommand(
             Command::new("link")
@@ -1106,6 +1116,7 @@ fn self_cmd(paths: &Paths, sub: &ArgMatches) -> Result<Data, core::error::Carpen
             paths,
             bin_dir(m),
             m.get_flag("purge-config"),
+            m.get_flag("yes"),
             &core::store::install_name(),
         ),
         Some(("register", m)) => commands::register::register(
@@ -1117,6 +1128,7 @@ fn self_cmd(paths: &Paths, sub: &ArgMatches) -> Result<Data, core::error::Carpen
         Some(("deregister", m)) => commands::deregister::deregister(
             paths,
             &arg_string(m, "app"),
+            m.get_flag("yes"),
             &core::store::install_name(),
         ),
         Some(("list", m)) => commands::installs::list(paths, bin_dir(m)),
@@ -1125,6 +1137,7 @@ fn self_cmd(paths: &Paths, sub: &ArgMatches) -> Result<Data, core::error::Carpen
             &arg_string(m, "tag"),
             bin_dir(m),
             m.get_flag("purge-config"),
+            m.get_flag("yes"),
         ),
         Some(("link", _)) => commands::link::register(paths),
         _ => Err(core::error::CarpenterError::ValidationError(format!(

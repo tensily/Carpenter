@@ -115,17 +115,24 @@ pub struct Removed {
     pub config_purged: bool,
 }
 
-/// Remove the install `name` (tag): skill of every registered app (best-effort),
-/// then the install's binary (the underscored command name or the kebab stem —
-/// whichever exists), then the config file with `purge_config`
-/// ([adr/019] semantics — course data is never touched). `NotFound` when
-/// neither skill nor binary exists.
-pub fn remove(
-    paths: &Paths,
-    bin_dir: Option<&str>,
-    purge_config: bool,
-    name: &str,
-) -> Result<Removed, CarpenterError> {
+/// Everything a removal would touch, discovered up front — shared by the
+/// confirmation plan ([`removal_plan`]) and the removal itself ([`remove`]),
+/// so the plan cannot disagree with the outcome.
+struct Legs {
+    /// binary candidate path (may not exist).
+    bin: PathBuf,
+    /// whether the binary exists.
+    bin_present: bool,
+    /// registered skill paths per app (existing ones only).
+    skills: Vec<(App, PathBuf)>,
+    /// the install's data dir (`<config base>/<tag>`), present or not.
+    data_dir: PathBuf,
+    /// the install's config file (`<data_dir>/config.json`) — the `--purge-config`
+    /// target: the removed tag's config, never the calling install's.
+    config: PathBuf,
+}
+
+fn legs(paths: &Paths, bin_dir: Option<&str>, name: &str) -> Result<Legs, CarpenterError> {
     let cfg = paths
         .config_file()
         .map(|p| crate::core::config::load_from(&p))
@@ -134,27 +141,108 @@ pub fn remove(
     let bin = find_binary(&target_dir, name)
         .unwrap_or_else(|| target_dir.join(store::binary_file_name(name)));
     let (xdg, home) = (paths.xdg_root()?, paths.home_dir()?);
-    let skill_registered = App::all()
-        .iter()
-        .any(|a| a.skill_path(xdg, home, name).exists());
-    let config_path = paths.config_file();
-    if !skill_registered && !bin.exists() {
+    let skills = App::all()
+        .into_iter()
+        .map(|app| {
+            let p = app.skill_path(xdg, home, name);
+            (app, p)
+        })
+        .filter(|(_, p)| p.exists())
+        .collect();
+    let data_dir = xdg.join(name);
+    Ok(Legs {
+        bin_present: bin.exists(),
+        bin,
+        skills,
+        config: data_dir.join("config.json"),
+        data_dir,
+    })
+}
+
+/// The human-readable removal plan shown before confirmation: exactly what the
+/// removal will touch, and what it deliberately keeps (the data dir — adr/019).
+/// Derived from the same discovery as [`remove`], so the plan is always
+/// truthful — including that skills are machine-global per tag (adr/027) and
+/// `--bin-dir` scopes only the binary.
+pub fn removal_plan(
+    paths: &Paths,
+    bin_dir: Option<&str>,
+    purge_config: bool,
+    name: &str,
+) -> Result<String, CarpenterError> {
+    let l = legs(paths, bin_dir, name)?;
+    let mut plan = format!("removal plan for {name:?}\n");
+    plan.push_str(&format!(
+        "  binary: {}{}\n",
+        l.bin.display(),
+        if l.bin_present { "" } else { " (not present)" }
+    ));
+    if l.skills.is_empty() {
+        plan.push_str("  skills: none registered\n");
+    } else {
+        for (app, path) in &l.skills {
+            plan.push_str(&format!(
+                "  skill: {} ({} reads it from this machine-global path; --bin-dir scopes only the binary)\n",
+                path.display(),
+                app.name()
+            ));
+        }
+    }
+    if purge_config {
+        plan.push_str(&format!(
+            "  config: {}{}\n",
+            l.config.display(),
+            if l.config.exists() {
+                " (purged)"
+            } else {
+                " (not present)"
+            }
+        ));
+    } else {
+        plan.push_str(&format!(
+            "  config: {} kept (pass --purge-config to remove)\n",
+            l.config.display()
+        ));
+    }
+    plan.push_str(&format!(
+        "  data dir {} kept (adr/019: course data is never touched)\n",
+        l.data_dir.display()
+    ));
+    Ok(plan)
+}
+
+/// Remove the install `name` (tag): skill of every registered app (best-effort),
+/// then the install's binary (the underscored command name or the kebab stem —
+/// whichever exists), then the removed tag's config file with `purge_config`
+/// ([adr/019] semantics — course data is never touched). `NotFound` only when
+/// no leg exists at all (no registered skill, no binary, no data dir) — parity
+/// with `list`, which surfaces data-dir-only installs. Callers gate this behind
+/// a confirmation plan ([`removal_plan`] + `core::confirm`, or `--yes`).
+pub fn remove(
+    paths: &Paths,
+    bin_dir: Option<&str>,
+    purge_config: bool,
+    name: &str,
+) -> Result<Removed, CarpenterError> {
+    let l = legs(paths, bin_dir, name)?;
+    if l.skills.is_empty() && !l.bin_present && !l.data_dir.exists() {
         return Err(CarpenterError::NotFound(format!(
-            "carpenter install {name:?} not found (no registered skill and no binary at {})",
-            bin.display()
+            "carpenter install {name:?} not found (no registered skill, no binary at {}, and no data dir at {})",
+            l.bin.display(),
+            l.data_dir.display()
         )));
     }
-    let skill = remove_skill(paths, name);
-    let removed_bin = if bin.exists() {
-        std::fs::remove_file(&bin).map_err(store::io_to_store)?;
-        Some(bin.display().to_string())
+    let (xdg, home) = (paths.xdg_root()?, paths.home_dir()?);
+    let skill = remove_skills(&l.skills, xdg, home, name);
+    let removed_bin = if l.bin_present {
+        std::fs::remove_file(&l.bin).map_err(store::io_to_store)?;
+        Some(l.bin.display().to_string())
     } else {
         None
     };
-    let config_purged = if purge_config {
-        config_path
-            .map(|p| p.exists() && std::fs::remove_file(&p).map_err(store::io_to_store).is_ok())
-            .unwrap_or(false)
+    let config_purged = if purge_config && l.config.exists() {
+        std::fs::remove_file(&l.config).map_err(store::io_to_store)?;
+        true
     } else {
         false
     };
@@ -191,20 +279,12 @@ fn find_binary(dir: &Path, name: &str) -> Option<PathBuf> {
     hits.into_iter().next()
 }
 
-/// Remove the skill of every app registered for `name`, best-effort: a missing
-/// or failing removal never fails the uninstall (mirrors `upgrade`'s
-/// `skill_outcome_for`).
-fn remove_skill(paths: &Paths, name: &str) -> Value {
-    let (root, home) = match (paths.xdg_root(), paths.home_dir()) {
-        (Ok(r), Ok(h)) => (r, h),
-        (Err(e), _) | (_, Err(e)) => {
-            return json!({"removed": false, "reason": "no_anchor", "error": e.to_string()})
-        }
-    };
-    let outcomes: Vec<Value> = App::all()
-        .into_iter()
-        .filter(|app| app.skill_path(root, home, name).exists())
-        .map(|app| match skill::deregister(app, root, home, name) {
+/// Remove the discovered skills best-effort: a failing removal never fails the
+/// uninstall (mirrors `upgrade`'s `skill_outcome_for`).
+fn remove_skills(skills: &[(App, PathBuf)], root: &Path, home: &Path, name: &str) -> Value {
+    let outcomes: Vec<Value> = skills
+        .iter()
+        .map(|(app, _)| match skill::deregister(*app, root, home, name) {
             Ok(d) => json!({"removed": true, "app": d.app, "path": d.path}),
             Err(e) => json!({"removed": false, "reason": "not_registered", "error": e.to_string()}),
         })

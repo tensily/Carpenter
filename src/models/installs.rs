@@ -47,8 +47,8 @@ pub mod examples {
             ),
             (
                 "self remove carpenter-ivan-topic",
-                "tag (positional)",
-                "same removal as `uninstall`, aimed at any install by tag; `NotFound` when absent",
+                "tag (positional) · [--bin-dir] [--purge-config] [--yes]",
+                "same removal as `uninstall`, aimed at any install by tag; prints a removal plan and confirms on stdin unless `--yes`; `NotFound` when no skill, binary, or data dir exists",
                 Data::InstallsRemove {
                     removed: true,
                     tag: String::from("carpenter-ivan-topic"),

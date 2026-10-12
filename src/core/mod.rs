@@ -4,6 +4,7 @@
 pub mod bugfile;
 pub mod compare;
 pub mod config;
+pub mod confirm;
 pub mod db;
 pub mod error;
 pub mod exec;

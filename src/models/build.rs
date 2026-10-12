@@ -28,9 +28,10 @@ pub mod examples {
             (
                 "self install [--bin-dir <p>]",
                 "—",
-                "`on_path` = whether `bin_dir` resolves on `$PATH`",
+                "`on_path` = whether `bin_dir` resolves on `$PATH`; `already_present` = the target binary existed before this install",
                 Data::Install {
                     installed: true,
+                    already_present: false,
                     bin: String::from("~/.local/bin/carpenter"),
                     on_path: true,
                 },
@@ -51,9 +52,9 @@ pub mod examples {
                 },
             ),
             (
-                "self uninstall [--bin-dir <p>] [--purge-config]",
+                "self uninstall [--bin-dir <p>] [--purge-config] [--yes]",
                 "—",
-                "`skill` = per-app removal outcomes (one per registered app): `[{\"removed\":true,\"app\":\"opencode\",…},{\"removed\":true,\"app\":\"claude-code\",…}]` · nothing registered ⇒ `{removed:false,reason:\"not_registered\"}`; `bin:null` when no binary was present; `NotFound` when neither skill nor binary exists",
+                "prints a removal plan and confirms on stdin unless `--yes` (decline/EOF ⇒ `Conflict`) · `skill` = per-app removal outcomes (one per registered app): `[{\"removed\":true,\"app\":\"opencode\",…},{\"removed\":true,\"app\":\"claude-code\",…}]` · nothing registered ⇒ `{removed:false,reason:\"not_registered\"}` · `bin:null` when no binary was present · `NotFound` when no skill, binary, or data dir exists",
                 Data::Uninstall {
                     uninstalled: true,
                     bin: Some(String::from("~/.local/bin/carpenter")),
