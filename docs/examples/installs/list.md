@@ -1,7 +1,7 @@
 **example:**
 
 ```sh
-carpenter installs list
+carpenter self list
 ```
 
 Result (one envelope on stdout):

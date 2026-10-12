@@ -1,7 +1,7 @@
 **example:**
 
 ```sh
-carpenter installs remove carpenter-ivan-topic
+carpenter self remove carpenter-ivan-topic
 ```
 
 Result (one envelope on stdout):

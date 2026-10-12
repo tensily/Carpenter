@@ -25,7 +25,7 @@ pub mod examples {
     pub fn rows() -> Vec<(&'static str, &'static str, &'static str, Data)> {
         vec![
             (
-                "installs list",
+                "self list",
                 "--bin-dir (default config `bin_dir`)",
                 "union of `carpenter*` binaries, registered skills, and data dirs; sorted by tag",
                 Data::InstallsList {
@@ -46,7 +46,7 @@ pub mod examples {
                 },
             ),
             (
-                "installs remove carpenter-ivan-topic",
+                "self remove carpenter-ivan-topic",
                 "tag (positional)",
                 "same removal as `uninstall`, aimed at any install by tag; `NotFound` when absent",
                 Data::InstallsRemove {

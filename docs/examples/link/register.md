@@ -1,7 +1,7 @@
 **example:**
 
 ```sh
-carpenter link register
+carpenter self link
 ```
 
 Result (one envelope on stdout):

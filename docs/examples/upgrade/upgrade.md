@@ -1,7 +1,7 @@
 **example:**
 
 ```sh
-carpenter upgrade --bin-dir ~/.local/bin
+carpenter self upgrade --bin-dir ~/.local/bin
 ```
 
 Result (one envelope on stdout):

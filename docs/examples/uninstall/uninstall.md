@@ -1,7 +1,7 @@
 **example:**
 
 ```sh
-carpenter uninstall --bin-dir ~/.local/bin
+carpenter self uninstall --bin-dir ~/.local/bin
 ```
 
 Result (one envelope on stdout):

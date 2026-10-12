@@ -51,7 +51,7 @@ mod tests {
         assert!(!version.is_empty());
         assert!(!summary.is_empty());
         assert!(commands.contains(&String::from("course")), "{commands:?}");
-        assert!(commands.contains(&String::from("register")), "{commands:?}");
+        assert!(commands.contains(&String::from("self")), "{commands:?}");
         let _ = std::fs::remove_dir_all(&paths.root);
     }
 }

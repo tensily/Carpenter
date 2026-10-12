@@ -1,7 +1,7 @@
 **example:**
 
 ```sh
-carpenter install --bin-dir ~/.local/bin
+carpenter self install --bin-dir ~/.local/bin
 ```
 
 Result (one envelope on stdout):

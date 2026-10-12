@@ -98,12 +98,12 @@ protected branch and holds no credentials.
 
   ```sh
   curl -LsSf https://github.com/tensily/Carpenter/releases/download/nightly/install.sh | sh
-  carpenter upgrade --channel nightly
+  carpenter self upgrade --channel nightly
   ```
 
 - **stable (`vX.Y.Z`)** — immutable, versioned from `Cargo.toml`, published when
   `nightly` merges into `main`. GitHub marks it **Latest**, so the README
-  one-liner and `carpenter upgrade` (default `--channel stable`) follow it.
+  one-liner and `carpenter self upgrade` (default `--channel stable`) follow it.
   Users never see nightly — the README is end-user-only (install + getting
   started; stable).
 

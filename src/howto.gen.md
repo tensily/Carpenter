@@ -1274,45 +1274,6 @@ Result (one envelope on stdout):
 
 Value is coerced to the key's type.
 
-## register
-
-Register the carpenter skill with an agent app (writes SKILL.md; opencode also gets a permission entry).
-
-- `--app` — Agent app (opencode|claude-code).
-- `--print-skill` — Print the rendered SKILL.md to stdout instead of writing.
-
-**example:**
-
-```sh
-carpenter register --app opencode
-```
-
-Result (one envelope on stdout):
-```json
-{"status":"ok","message":"skill registered: opencode","data":{"app":"opencode","path":"/…/opencode/skills/carpenter/SKILL.md","version":"0.12.0","installed":true}}
-```
-
-Writes `SKILL.md` + merges the `permission.skill.carpenter="allow"` entry. `--print-skill` prints the rendered bytes instead (no FS change).
-
-## deregister
-
-Deregister the carpenter skill (removes SKILL.md; opencode also loses its permission entry).
-
-- `--app` — Agent app (opencode|claude-code).
-
-**example:**
-
-```sh
-carpenter deregister --app opencode
-```
-
-Result (one envelope on stdout):
-```json
-{"status":"ok","message":"skill deregistered: opencode","data":{"app":"opencode","path":"/…/opencode/skills/carpenter/SKILL.md","removed":true}}
-```
-
-Removes `SKILL.md` (+ dir if empty) and the allow key. NotFound if absent.
-
 ## build
 
 Scaffold a course at a path (course.json + course.db + lessons/).
@@ -1332,26 +1293,19 @@ Result (one envelope on stdout):
 
 Low-level scaffold (no spec). Prefer `course create`.
 
-## install
+## self
+
+Install, update, register, and remove carpenter installs (the tool itself).
+
+_flags: none_
+
+### install
 
 Place the carpenter binary into a bin dir.
 
-- `--bin-dir <PATH>` — Bin dir (default: config bin_dir → ~/.local/bin).
+- `--bin-dir <PATH>` — Bin dir (default: config bin_dir -> ~/.local/bin).
 
-**example:**
-
-```sh
-carpenter install --bin-dir ~/.local/bin
-```
-
-Result (one envelope on stdout):
-```json
-{"status":"ok","message":"installed: /home/u/.local/bin/carpenter","data":{"installed":true,"bin":"/home/u/.local/bin/carpenter","on_path":true}}
-```
-
-Default bin dir from config (`bin_dir` → ~/.local/bin).
-
-## upgrade
+### upgrade
 
 Replace the installed binary from a published release (or a source checkout) and refresh the skill.
 
@@ -1360,124 +1314,44 @@ Replace the installed binary from a published release (or a source checkout) and
 - `--bin-dir <PATH>` — Install target (default: config bin_dir).
 - `--no-skill` — Skip the skill auto-refresh (skill:null).
 
-**example:**
-
-```sh
-carpenter upgrade --bin-dir ~/.local/bin
-```
-
-Result (one envelope on stdout):
-```json
-{"status":"ok","message":"upgraded: 0.12.0","data":{"upgraded":true,"version":"0.12.0","bin":"/home/u/.local/bin/carpenter","source":"https://github.com/tensily/Carpenter/releases/latest/download/carpenter-x86_64-unknown-linux-musl.tar.gz","skill":[{"refreshed":true,"app":"opencode","path":"/home/u/.config/opencode/skills/carpenter/SKILL.md"},{"refreshed":true,"app":"claude-code","path":"/home/u/.claude/skills/carpenter/SKILL.md"}]}}
-```
-
-Fetches the latest **stable** release (checksum-verified), replaces the binary, and
-refreshes the skill of every **registered** app (`skill` = one outcome per app;
-nothing registered ⇒ `{"refreshed":false,"reason":"not_registered",…}`).
-`--channel nightly` follows the rolling prerelease instead; `--source <path>` (or
-config `source_dir`) rebuilds from a local checkout. `--no-skill` skips the
-skill write (`skill:null`).
-
-## uninstall
+### uninstall
 
 Remove the carpenter skill, the installed binary, and (with --purge-config) the config.
 
-- `--bin-dir <PATH>` — Bin dir (default: config bin_dir → ~/.local/bin).
+- `--bin-dir <PATH>` — Bin dir (default: config bin_dir -> ~/.local/bin).
 - `--purge-config` — Also remove the carpenter config file.
 
-**example:**
+### register
 
-```sh
-carpenter uninstall --bin-dir ~/.local/bin
-```
+Register the carpenter skill with an agent app (writes SKILL.md; opencode also gets a permission entry).
 
-Result (one envelope on stdout):
-```json
-{"status":"ok","message":"uninstalled: /home/u/.local/bin/carpenter","data":{"uninstalled":true,"bin":"/home/u/.local/bin/carpenter","skill":[{"app":"opencode","path":"/home/u/.config/opencode/skills/carpenter/SKILL.md","removed":true},{"app":"claude-code","path":"/home/u/.claude/skills/carpenter/SKILL.md","removed":true}],"config_purged":false}}
-```
+- `--app` — Agent app (opencode|claude-code).
+- `--print-skill` — Print the rendered SKILL.md to stdout instead of writing.
 
-Inverse of `install`: removes the skill of every **registered** app (best-effort — `{"removed":false,"reason":"not_registered"}` when none), then deletes `<bin_dir>/carpenter` (safe while running on Linux/macOS). `NotFound` when neither skill nor binary exists. `--purge-config` also removes the config file; course data is never touched.
+### deregister
 
-## installs
+Deregister the carpenter skill (removes SKILL.md; opencode also loses its permission entry).
 
-Discover and remove carpenter installs by tag (adr/027).
-
-_flags: none_
+- `--app` — Agent app (opencode|claude-code).
 
 ### list
 
-List carpenter installs (binaries ∪ skills ∪ data dirs).
+List carpenter installs on this machine (binaries, skills, data dirs).
 
-- `--bin-dir <PATH>` — Bin dir (default: config bin_dir → ~/.local/bin).
-
-**example:**
-
-```sh
-carpenter installs list
-```
-
-Result (one envelope on stdout):
-```json
-{"status":"ok","message":"installs listed","data":{"installs":[{"tag":"carpenter","bin":"/home/u/.local/bin/carpenter","skill_apps":["opencode"],"data_dir":"/home/u/.config/carpenter"},{"tag":"carpenter-ivan-topic","bin":"/home/u/.local/bin/carpenter-ivan-topic","skill_apps":["opencode"],"data_dir":"/home/u/.config/carpenter-ivan-topic"}]}}
-```
-
-Discovers every carpenter install on this machine, keyed by its **tag** (the
-binary's file stem — adr/027): `carpenter` is the stock install; a branch
-install carries its branch name. The union of `carpenter*` binaries in
-`bin_dir`, registered skill dirs under either agent app, and data dirs under
-the config base; sorted by tag. A row's `data_dir` is the path the tag derives
-to even when it does not exist yet, and `bin` is `null` when only a skill or
-data dir remains.
+- `--bin-dir <PATH>` — Bin dir (default: config bin_dir -> ~/.local/bin).
 
 ### remove
 
 Uninstall any carpenter install by tag (skill + binary + config purge).
 
-- `--bin-dir <PATH>` — Bin dir (default: config bin_dir → ~/.local/bin).
+- `--bin-dir <PATH>` — Bin dir (default: config bin_dir -> ~/.local/bin).
 - `--purge-config` — Also remove the target install's config file.
 
-**example:**
+### link
 
-```sh
-carpenter installs remove carpenter-ivan-topic
-```
-
-Result (one envelope on stdout):
-```json
-{"status":"ok","message":"install removed: carpenter-ivan-topic","data":{"removed":true,"tag":"carpenter-ivan-topic","bin":"/home/u/.local/bin/carpenter-ivan-topic","skill":[{"app":"opencode","path":"/home/u/.config/opencode/skills/carpenter-ivan-topic/SKILL.md","removed":true}],"config_purged":false}}
-```
-
-Generic uninstall: removes **any** install by tag — the tagged binary, its
-skill from every app that registered it, and (with `--purge-config`) its
-config file — regardless of which carpenter is running the command. Same
-adr/019 semantics as `uninstall` (course data is never touched; `NotFound`
-when the tag has neither skill nor binary); the tag must be kebab-case
-(`^[a-z0-9]+(-[a-z0-9]+)*$`, max 60).
-
-## link
-
-Link manifest commands (future CLI registry).
+Emit the future CLI registry manifest.
 
 _flags: none_
-
-### register
-
-Emit the carpenter link manifest.
-
-_flags: none_
-
-**example:**
-
-```sh
-carpenter link register
-```
-
-Result (one envelope on stdout):
-```json
-{"status":"ok","message":"link manifest emitted","data":{"name":"carpenter","version":"0.12.0","bin":"/…/carpenter","summary":"Agent-driven CLI that builds Python/Jupyter learning material.","howto_excerpt":"Run `carpenter howto` for the full, always-current command manual.","commands":["course","lesson","plan","quiz","howto"]}}
-```
-
-Future CLI registry manifest. Read-only emit.
 
 ## Scenarios
 

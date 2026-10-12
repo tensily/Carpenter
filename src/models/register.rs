@@ -8,7 +8,7 @@ pub mod examples {
     pub fn rows() -> Vec<(&'static str, &'static str, &'static str, Data)> {
         vec![
             (
-                "register [--app opencode]",
+                "self register [--app opencode]",
                 "--app (default `opencode`)",
                 "writes `SKILL.md` + merges `\"skill\":{\"carpenter\":\"allow\"}`; `agents` ⇒ `ValidationError`",
                 Data::Register {
@@ -19,7 +19,7 @@ pub mod examples {
                 },
             ),
             (
-                "register --app claude-code",
+                "self register --app claude-code",
                 "--app",
                 "writes `SKILL.md` into `~/.claude/skills/` (auto-discovered — no permission merge)",
                 Data::Register {
@@ -30,7 +30,7 @@ pub mod examples {
                 },
             ),
             (
-                "register --print-skill",
+                "self register --print-skill",
                 "--app",
                 "prints the rendered `SKILL.md` bytes; no filesystem change",
                 Data::PrintSkill {
@@ -38,7 +38,7 @@ pub mod examples {
                 },
             ),
             (
-                "deregister [--app opencode]",
+                "self deregister [--app opencode]",
                 "--app (default `opencode`)",
                 "removes `SKILL.md` (+ dir if empty) + the `carpenter` allow key (apps that have one); `NotFound` if absent",
                 Data::Deregister {

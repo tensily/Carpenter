@@ -1,7 +1,7 @@
 **example:**
 
 ```sh
-carpenter deregister --app opencode
+carpenter self deregister --app opencode
 ```
 
 Result (one envelope on stdout):

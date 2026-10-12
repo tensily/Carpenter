@@ -265,8 +265,8 @@ jobs:
           say "opencode on PATH: $(command -v opencode || echo 'not-found')"
           opencode --version 2>/dev/null || say "opencode --version: failed"
           say "=== carpenter's claim (register envelope) ==="
-          "$CARPENTER_INSTALL_DIR/carpenter" register --app opencode \
-            || say "carpenter register: failed"
+          "$CARPENTER_INSTALL_DIR/carpenter" self register --app opencode \
+            || say "carpenter self register: failed"
           say "=== filesystem truth ==="
           for root in "$HOME/.config/opencode" \
                       "$HOME/Library/Application Support/opencode" \
@@ -291,12 +291,12 @@ jobs:
           test -x "$BIN"
           "$BIN" --version
           "$BIN" howto > howto.md && test -s howto.md
-          "$BIN" register --app opencode | grep '"status":"ok"'
+          "$BIN" self register --app opencode | grep '"status":"ok"'
           test -f "$HOME/.config/opencode/skills/carpenter/SKILL.md" \
             || test -f "$HOME/Library/Application Support/opencode/skills/carpenter/SKILL.md"
       - name: uninstall reverses the footprint
         run: |
           set -eu
           BIN="$CARPENTER_INSTALL_DIR/carpenter"
-          "$BIN" uninstall --bin-dir "$CARPENTER_INSTALL_DIR" | grep '"status":"ok"'
+          "$BIN" self uninstall --bin-dir "$CARPENTER_INSTALL_DIR" | grep '"status":"ok"'
           test ! -e "$BIN"

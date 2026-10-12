@@ -139,7 +139,7 @@ if [ -n "$apps" ]; then
         fi
     done
 else
-    printf '  %sregister%s  %s(no agent app detected; later: carpenter register --app opencode|claude-code)%s\n' \
+    printf '  %sregister%s  %s(no agent app detected; later: carpenter self register --app opencode|claude-code)%s\n' \
         "$MUTED" "$RESET" "$CREAM" "$RESET"
 fi
 if on_path; then
@@ -208,10 +208,10 @@ ask_register() { # $1 = app label → Y/n from the user (Enter registers)
 }
 
 do_register() { # $1 = --app value, $2 = label for notes
-    if "${INSTALL_DIR}/carpenter" register --app "$1" >/dev/null 2>&1; then
+    if "${INSTALL_DIR}/carpenter" self register --app "$1" >/dev/null 2>&1; then
         say "registered in $2 (skill)"
     else
-        printf 'carpenter: note: register failed; run manually: %s register --app %s\n' \
+        printf 'carpenter: note: register failed; run manually: %s self register --app %s\n' \
             "${INSTALL_DIR}/carpenter" "$1" >&2
     fi
 }
@@ -223,7 +223,7 @@ if [ -n "$apps" ]; then
             if ask_register "$app"; then
                 do_register "$app" "$app"
             else
-                say "skipped $app (register later: carpenter register --app $app)"
+                say "skipped $app (register later: carpenter self register --app $app)"
             fi
         else
             say "$app detected — registering carpenter skill (non-interactive)"

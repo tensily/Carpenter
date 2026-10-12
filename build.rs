@@ -187,6 +187,19 @@ fn parse_invocation(line: &str, known: &HashSet<String>) -> Option<String> {
         if known.contains(&sub) {
             return Some(sub);
         }
+        // The `self` umbrella (adr/027): `carpenter self <verb>` dispatches to
+        // the install-lifecycle command fns that live in their own modules
+        // (upgrade::upgrade, installs::list, link::register, …). Resolve by
+        // unique fn-name suffix across the known set.
+        if t0 == "self" {
+            let matches: Vec<&String> = known
+                .iter()
+                .filter(|k| k.ends_with(&format!("::{t1}")))
+                .collect();
+            if matches.len() == 1 {
+                return Some((*matches[0]).clone());
+            }
+        }
     }
     Some(format!("{t0}::{t0}"))
 }

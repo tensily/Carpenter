@@ -26,7 +26,7 @@ pub mod examples {
                 },
             ),
             (
-                "install [--bin-dir <p>]",
+                "self install [--bin-dir <p>]",
                 "—",
                 "`on_path` = whether `bin_dir` resolves on `$PATH`",
                 Data::Install {
@@ -36,7 +36,7 @@ pub mod examples {
                 },
             ),
             (
-                "upgrade [--channel stable|nightly] [--source <p>] [--bin-dir <p>] [--no-skill]",
+                "self upgrade [--channel stable|nightly] [--source <p>] [--bin-dir <p>] [--no-skill]",
                 "no flag → latest **stable** release; `--channel nightly` → rolling prerelease; `--source` → config `source_dir` → local build",
                 "`skill` = per-app refresh outcomes (one per registered app): `[{\"refreshed\":true,\"app\":\"opencode\",…},{\"refreshed\":true,\"app\":\"claude-code\",…}]` · nothing registered ⇒ `{refreshed:false,reason:\"not_registered\",warning:\"…\"}` · `--no-skill` ⇒ `skill:null`",
                 Data::Upgrade {
@@ -51,7 +51,7 @@ pub mod examples {
                 },
             ),
             (
-                "uninstall [--bin-dir <p>] [--purge-config]",
+                "self uninstall [--bin-dir <p>] [--purge-config]",
                 "—",
                 "`skill` = per-app removal outcomes (one per registered app): `[{\"removed\":true,\"app\":\"opencode\",…},{\"removed\":true,\"app\":\"claude-code\",…}]` · nothing registered ⇒ `{removed:false,reason:\"not_registered\"}`; `bin:null` when no binary was present; `NotFound` when neither skill nor binary exists",
                 Data::Uninstall {

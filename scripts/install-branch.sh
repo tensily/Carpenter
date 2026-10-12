@@ -55,7 +55,7 @@ detect_apps() {
 if [ "$UNINSTALL" = yes ]; then
     [ -x "$BIN" ] || die "no tagged install at $BIN"
     say "uninstalling $BIN_NAME (binary, skill, data dir)"
-    "$BIN" uninstall || say "note: CLI uninstall reported an error; continuing"
+    "$BIN" self uninstall || say "note: CLI uninstall reported an error; continuing"
     data_dir="${XDG_CONFIG_HOME:-${HOME}/.config}/$BIN_NAME"
     [ "$(uname -s)" = Darwin ] && data_dir="${HOME}/Library/Application Support/$BIN_NAME"
     if [ -d "$data_dir" ]; then
@@ -110,17 +110,17 @@ apps=$(detect_apps)
 if [ -n "$apps" ]; then
     # shellcheck disable=SC2086  # apps is a deliberate word list
     for app in $apps; do
-        if "$BIN" register --app "$app" >/dev/null 2>&1; then
+        if "$BIN" self register --app "$app" >/dev/null 2>&1; then
             say "registered skill $BIN_NAME in $app"
         else
-            say "note: register failed for $app; run manually: $BIN register --app $app"
+            say "note: register failed for $app; run manually: $BIN self register --app $app"
         fi
     done
 else
-    say "no agent app detected (later: $BIN register --app opencode|claude-code)"
+    say "no agent app detected (later: $BIN self register --app opencode|claude-code)"
 fi
 
 say "installed $BIN"
 say "data dir: $data_dir (isolated from the stock install)"
 say "caveat: never run '$BIN_NAME upgrade' — it would pull stable bits under this branch tag"
-say "remove with: scripts/install-branch.sh --uninstall  (or: carpenter installs remove $BIN_NAME)"
+say "remove with: scripts/install-branch.sh --uninstall  (or: carpenter self remove $BIN_NAME)"

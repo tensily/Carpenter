@@ -307,7 +307,7 @@ fn link_output_entry() -> SpecEntry {
 
 fn installs_output_entry() -> SpecEntry {
     SpecEntry {
-        file: "24-installs.md",
+        file: "24-self.md",
         markdown: output_table(installs::examples::rows()),
     }
 }
