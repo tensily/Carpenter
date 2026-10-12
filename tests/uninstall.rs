@@ -74,7 +74,8 @@ fn uninstall_self_deletes_running_binary() {
 
     // register via the installed copy (skill + permission land in the sandbox)
     let (ok, env) = run(sandboxed(&bin, &root)
-        .arg("self").arg("register")
+        .arg("self")
+        .arg("register")
         .arg("--app")
         .arg("opencode"));
     assert!(ok, "{env}");
@@ -83,7 +84,8 @@ fn uninstall_self_deletes_running_binary() {
 
     // uninstall FROM the installed copy — the self-delete path
     let (ok, env) = run(sandboxed(&bin, &root)
-        .arg("self").arg("uninstall")
+        .arg("self")
+        .arg("uninstall")
         .arg("--bin-dir")
         .arg(bin.parent().unwrap()));
     assert!(ok, "{env}");
@@ -116,7 +118,8 @@ fn uninstall_twice_is_notfound() {
     let bin_dir = bin.parent().unwrap().to_path_buf();
 
     let (ok, _) = run(sandboxed(&bin, &root)
-        .arg("self").arg("uninstall")
+        .arg("self")
+        .arg("uninstall")
         .arg("--bin-dir")
         .arg(&bin_dir));
     assert!(ok);
@@ -124,7 +127,8 @@ fn uninstall_twice_is_notfound() {
     // second run (from the still-existing test binary): no skill, no binary →
     // error envelope, exit 1
     let (ok, env) = run(sandboxed(Path::new(carpenter_bin()), &root)
-        .arg("self").arg("uninstall")
+        .arg("self")
+        .arg("uninstall")
         .arg("--bin-dir")
         .arg(&bin_dir));
     assert!(!ok, "{env}");
@@ -142,7 +146,8 @@ fn uninstall_purges_config_with_flag() {
     let bin_dir = bin.parent().unwrap().to_path_buf();
 
     let (ok, env) = run(sandboxed(&bin, &root)
-        .arg("self").arg("uninstall")
+        .arg("self")
+        .arg("uninstall")
         .arg("--bin-dir")
         .arg(&bin_dir)
         .arg("--purge-config"));
@@ -158,7 +163,9 @@ fn uninstall_notfound_with_default_bin_dir_when_nothing_installed() {
     // no --bin-dir: default resolves under the sandboxed HOME → nothing there
     let root = setup("uninstall-default");
 
-    let (ok, env) = run(sandboxed(Path::new(carpenter_bin()), &root).arg("self").arg("uninstall"));
+    let (ok, env) = run(sandboxed(Path::new(carpenter_bin()), &root)
+        .arg("self")
+        .arg("uninstall"));
     assert!(!ok, "{env}");
     assert_eq!(env["code"], "NotFound", "{env}");
 
@@ -227,7 +234,8 @@ fn install_sh_then_uninstall_reverses_footprint() {
 
     // uninstall from the installed copy — reverses the installer footprint
     let (ok, env) = run(sandboxed(&bin, &root)
-        .arg("self").arg("uninstall")
+        .arg("self")
+        .arg("uninstall")
         .arg("--bin-dir")
         .arg(&bin_dir));
     assert!(ok, "{env}");
@@ -309,7 +317,8 @@ fn install_sh_detects_and_registers_claude_code() {
 
     // uninstall from the installed copy — reverses the claude-code footprint
     let (ok, env) = run(sandboxed(&bin, &root)
-        .arg("self").arg("uninstall")
+        .arg("self")
+        .arg("uninstall")
         .arg("--bin-dir")
         .arg(&bin_dir));
     assert!(ok, "{env}");
