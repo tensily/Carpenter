@@ -15,7 +15,9 @@ use serde_json::Value;
 use crate::core::error::CarpenterError;
 use crate::core::store;
 
-/// The skill name (also the skills-dir leaf). Always `carpenter`.
+/// The stock skill name (also the skills-dir leaf). Branch-tagged installs use
+/// their [`install_name`](crate::core::store::install_name) instead — every
+/// caller resolves the name and passes it in (adr/027).
 pub const NAME: &str = "carpenter";
 
 /// Frontmatter matcher (authored once).
@@ -89,28 +91,28 @@ fn strip_deleted(s: &str) -> &str {
     s.strip_suffix(" (deleted)").unwrap_or(s)
 }
 
-/// Render the full `SKILL.md` (frontmatter + body). Embeds the running version,
-/// binary path, and the full generated howto manual. Deterministic within a
-/// process (same `current_exe`).
-pub fn render() -> Result<String, CarpenterError> {
+/// Render the full `SKILL.md` (frontmatter + body). Embeds the skill `name`
+/// (the install tag), the running version, binary path, and the full generated
+/// howto manual. Deterministic within a process (same `current_exe`).
+pub fn render(name: &str) -> Result<String, CarpenterError> {
     let exe = std::env::current_exe()
         .map_err(|e| CarpenterError::StoreError(format!("current_exe failed: {e}")))?;
     let exe = exe.display().to_string();
     let bin = strip_deleted(&exe);
     let version = env!("CARGO_PKG_VERSION");
     let frontmatter = format!(
-        "---\nname: {NAME}\ndescription: \"{}\"\n---\n\n",
+        "---\nname: {name}\ndescription: \"{}\"\n---\n\n",
         yaml_escape(DESCRIPTION)
     );
     let body = format!(
-        "# {NAME}\n\n\
+        "# {name}\n\n\
          {WHAT_THIS_IS}\n\n\
           ## Learner intake\n\n{INTAKE}\n\n\
           ## Workflow\n\n{WORKFLOW}\n\n\
          ## Content walkthrough\n\n{WALKTHROUGH}\n\n\
          ## Pedagogy\n\n{PEDAGOGY}\n\n\
          ## Command manual\n\n\
-         Sourced from `{NAME} howto` at render time — always matches the installed \
+         Sourced from `{name} howto` at render time — always matches the installed \
          binary. Includes end-to-end worked **scenarios** (course → plan → lesson \
          → quiz → progress) under its `## Scenarios` heading — consult them before \
          authoring a new course; the scenarios are illustrative (paths and slugs \
@@ -159,15 +161,16 @@ impl App {
         }
     }
 
-    /// The skill file path. `root` is the XDG root (e.g. `~/.config` — opencode
-    /// is a sibling of `carpenter/`); `home` is the user home dir (claude code
-    /// anchors at `~/.claude/`, not the XDG root).
-    pub fn skill_path(self, root: &Path, home: &Path) -> PathBuf {
+    /// The skill file path for the skill `name` (the install tag). `root` is
+    /// the XDG root (e.g. `~/.config` — opencode is a sibling of the
+    /// `carpenter/` data dir); `home` is the user home dir (claude code anchors
+    /// at `~/.claude/`, not the XDG root).
+    pub fn skill_path(self, root: &Path, home: &Path, name: &str) -> PathBuf {
         let base = match self {
             App::Opencode => root.join("opencode"),
             App::ClaudeCode => home.join(".claude"),
         };
-        base.join("skills").join(NAME).join("SKILL.md")
+        base.join("skills").join(name).join("SKILL.md")
     }
 
     /// The permission file path, if the app needs one. opencode loads skills
@@ -236,18 +239,30 @@ fn set_nested(root: &mut Value, path: &[&str], value: Value) -> Result<(), Carpe
 }
 
 /// Register: render + write `SKILL.md` (idempotent) and merge the allow entry
-/// (apps that have one). `root` is the XDG root containing both `carpenter/`
+/// (apps that have one). `name` is the skill name / install tag (adr/027) —
+/// validated against the app name regex; the dir leaf and permission key derive
+/// from it. `root` is the XDG root containing both the `carpenter/` data dir
 /// and `opencode/`; `home` is the user home dir.
-pub fn register(app: App, root: &Path, home: &Path) -> Result<Registered, CarpenterError> {
-    let content = render()?;
-    let skill_path = app.skill_path(root, home);
+pub fn register(
+    app: App,
+    root: &Path,
+    home: &Path,
+    name: &str,
+) -> Result<Registered, CarpenterError> {
+    if !name_is_valid(name) {
+        return Err(CarpenterError::ValidationError(format!(
+            "invalid skill name {name:?} (lowercase kebab-case)"
+        )));
+    }
+    let content = render(name)?;
+    let skill_path = app.skill_path(root, home, name);
     store::atomic_write(&skill_path, content.as_bytes())?;
     if let Some(perm_path) = app.permission_path(root) {
         let mut perm_root =
             read_json(&perm_path)?.unwrap_or_else(|| Value::Object(serde_json::Map::new()));
         set_nested(
             &mut perm_root,
-            &["permission", "skill", NAME],
+            &["permission", "skill", name],
             Value::String(String::from("allow")),
         )?;
         write_json(&perm_path, &perm_root)?;
@@ -260,10 +275,16 @@ pub fn register(app: App, root: &Path, home: &Path) -> Result<Registered, Carpen
 }
 
 /// Deregister: remove `SKILL.md` (+ dir if empty) and the allow key (apps that
-/// have one). `NotFound` if the skill file is absent. `root` is the XDG root;
-/// `home` is the user home dir.
-pub fn deregister(app: App, root: &Path, home: &Path) -> Result<Deregistered, CarpenterError> {
-    let skill_path = app.skill_path(root, home);
+/// have one). `NotFound` if the skill file is absent. `name` is the skill name
+/// / install tag (adr/027). `root` is the XDG root; `home` is the user home
+/// dir.
+pub fn deregister(
+    app: App,
+    root: &Path,
+    home: &Path,
+    name: &str,
+) -> Result<Deregistered, CarpenterError> {
+    let skill_path = app.skill_path(root, home, name);
     if !skill_path.exists() {
         return Err(CarpenterError::NotFound(format!(
             "skill for app {}",
@@ -284,7 +305,7 @@ pub fn deregister(app: App, root: &Path, home: &Path) -> Result<Deregistered, Ca
                 .and_then(|p| p.get_mut("skill"))
             {
                 if let Some(obj) = skill.as_object_mut() {
-                    obj.remove(NAME);
+                    obj.remove(name);
                 }
             }
             let _ = write_json(&perm_path, &perm_root);
@@ -302,8 +323,8 @@ mod tests {
 
     #[test]
     fn render_is_deterministic() {
-        let a = render().expect("render");
-        let b = render().expect("render");
+        let a = render(NAME).expect("render");
+        let b = render(NAME).expect("render");
         assert_eq!(a, b, "re-render must be byte-equal (adr/009)");
     }
 
@@ -324,7 +345,7 @@ mod tests {
 
     #[test]
     fn frontmatter_validates() {
-        let s = render().expect("render");
+        let s = render(NAME).expect("render");
         assert!(s.starts_with("---\n"), "missing opening fence:\n{s}");
         let close = s.find("\n---\n").expect("frontmatter close fence");
         let fm = &s[4..close];
@@ -430,7 +451,7 @@ mod tests {
     fn register_writes_skill_and_merges_permission() {
         let (d, home) = anchors();
         let Registered { app, path, version } =
-            register(App::Opencode, &d, &home).expect("register");
+            register(App::Opencode, &d, &home, NAME).expect("register");
         assert_eq!(app, "opencode");
         assert!(
             path.ends_with("opencode/skills/carpenter/SKILL.md"),
@@ -444,7 +465,7 @@ mod tests {
         .unwrap();
         assert_eq!(perm["permission"]["skill"]["carpenter"], "allow");
         // re-register is idempotent (no error, no duplicate)
-        register(App::Opencode, &d, &home).expect("idempotent");
+        register(App::Opencode, &d, &home, NAME).expect("idempotent");
         let perm2: Value = serde_json::from_str(
             &std::fs::read_to_string(d.join("opencode/opencode.json")).unwrap(),
         )
@@ -457,7 +478,8 @@ mod tests {
     #[test]
     fn register_claude_code_writes_skill_without_permission_store() {
         let (d, home) = anchors();
-        let Registered { app, path, .. } = register(App::ClaudeCode, &d, &home).expect("register");
+        let Registered { app, path, .. } =
+            register(App::ClaudeCode, &d, &home, NAME).expect("register");
         assert_eq!(app, "claude-code");
         assert!(
             path.ends_with(".claude/skills/carpenter/SKILL.md"),
@@ -466,7 +488,7 @@ mod tests {
         assert!(home.join(".claude/skills/carpenter/SKILL.md").exists());
         // claude code auto-discovers skills — nothing is written under the XDG root
         assert!(!d.join("opencode").exists() && !d.join("opencode.json").exists());
-        deregister(App::ClaudeCode, &d, &home).expect("deregister");
+        deregister(App::ClaudeCode, &d, &home, NAME).expect("deregister");
         assert!(!home.join(".claude/skills/carpenter").exists());
         let _ = std::fs::remove_dir_all(&d);
         let _ = std::fs::remove_dir_all(&home);
@@ -482,7 +504,7 @@ mod tests {
             br#"{"permission":{"skill":{"other-tool":"allow"},"bash":{"*":"allow"}},"theme":"dark"}"#,
         )
         .unwrap();
-        register(App::Opencode, &d, &home).expect("register");
+        register(App::Opencode, &d, &home, NAME).expect("register");
         let perm: Value =
             serde_json::from_str(&std::fs::read_to_string(&perm_path).unwrap()).unwrap();
         assert_eq!(perm["permission"]["skill"]["carpenter"], "allow");
@@ -496,8 +518,9 @@ mod tests {
     #[test]
     fn deregister_removes_skill_and_key_then_not_found() {
         let (d, home) = anchors();
-        register(App::Opencode, &d, &home).expect("register");
-        let Deregistered { app, path } = deregister(App::Opencode, &d, &home).expect("deregister");
+        register(App::Opencode, &d, &home, NAME).expect("register");
+        let Deregistered { app, path } =
+            deregister(App::Opencode, &d, &home, NAME).expect("deregister");
         assert_eq!(app, "opencode");
         assert!(path.ends_with("opencode/skills/carpenter/SKILL.md"));
         assert!(!d.join("opencode/skills/carpenter/SKILL.md").exists());
@@ -511,10 +534,81 @@ mod tests {
         .unwrap();
         assert!(perm["permission"]["skill"].get("carpenter").is_none());
         // second deregister is NotFound
-        let err = deregister(App::Opencode, &d, &home).unwrap_err();
+        let err = deregister(App::Opencode, &d, &home, NAME).unwrap_err();
         assert!(matches!(err, CarpenterError::NotFound(_)));
         let _ = std::fs::remove_dir_all(&d);
         let _ = std::fs::remove_dir_all(&home);
+    }
+
+    #[test]
+    fn register_branch_name_tags_dir_and_permission() {
+        let (d, home) = anchors();
+        let name = "carpenter-ivan-topic";
+        let Registered { path, .. } = register(App::Opencode, &d, &home, name).expect("register");
+        assert!(
+            path.ends_with("opencode/skills/carpenter-ivan-topic/SKILL.md"),
+            "{path}"
+        );
+        assert!(d
+            .join("opencode/skills/carpenter-ivan-topic/SKILL.md")
+            .exists());
+        let perm: Value = serde_json::from_str(
+            &std::fs::read_to_string(d.join("opencode/opencode.json")).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(perm["permission"]["skill"]["carpenter-ivan-topic"], "allow");
+        deregister(App::Opencode, &d, &home, name).expect("deregister");
+        assert!(!d.join("opencode/skills/carpenter-ivan-topic").exists());
+        assert!(perm_has_no_key(&d, name), "tagged key must be removed");
+        let _ = std::fs::remove_dir_all(&d);
+        let _ = std::fs::remove_dir_all(&home);
+    }
+
+    #[test]
+    fn branch_skills_coexist_with_stock_skill() {
+        let (d, home) = anchors();
+        register(App::Opencode, &d, &home, NAME).expect("stock register");
+        register(App::Opencode, &d, &home, "carpenter-ivan-topic").expect("branch register");
+        assert!(d.join("opencode/skills/carpenter/SKILL.md").exists());
+        assert!(d
+            .join("opencode/skills/carpenter-ivan-topic/SKILL.md")
+            .exists());
+        let perm: Value = serde_json::from_str(
+            &std::fs::read_to_string(d.join("opencode/opencode.json")).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(perm["permission"]["skill"]["carpenter"], "allow");
+        assert_eq!(perm["permission"]["skill"]["carpenter-ivan-topic"], "allow");
+        let _ = std::fs::remove_dir_all(&d);
+        let _ = std::fs::remove_dir_all(&home);
+    }
+
+    #[test]
+    fn render_embeds_the_install_name() {
+        let s = render("carpenter-ivan-topic").expect("render");
+        assert!(s.starts_with("---\nname: carpenter-ivan-topic\n"), "{s}");
+        assert!(s.contains("# carpenter-ivan-topic"));
+        assert!(s.contains("`carpenter-ivan-topic howto`"));
+    }
+
+    #[test]
+    fn register_rejects_invalid_skill_name() {
+        let (d, home) = anchors();
+        let err = register(App::Opencode, &d, &home, "bad_name").unwrap_err();
+        assert!(matches!(err, CarpenterError::ValidationError(_)), "{err:?}");
+        // nothing was written
+        assert!(!d.join("opencode").exists());
+        let _ = std::fs::remove_dir_all(&d);
+        let _ = std::fs::remove_dir_all(&home);
+    }
+
+    fn perm_has_no_key(d: &Path, key: &str) -> bool {
+        serde_json::from_str::<Value>(
+            &std::fs::read_to_string(d.join("opencode/opencode.json")).unwrap(),
+        )
+        .unwrap()["permission"]["skill"]
+            .get(key)
+            .is_none()
     }
 
     #[test]

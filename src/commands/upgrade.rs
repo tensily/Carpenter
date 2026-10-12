@@ -27,12 +27,16 @@ const NOT_REGISTERED_WARNING: &str =
     "CLI not registered in any agent app — nothing to upgrade. Run `carpenter register`.";
 
 /// `upgrade [--channel stable|nightly] [--source <p>] [--bin-dir <p>] [--no-skill]`.
+/// `name` is the install tag (adr/027) — the caller resolves it via
+/// [`store::install_name`]; the upgraded
+/// binary replaces `<bin_dir>/<name>` in place.
 pub fn upgrade(
     paths: &Paths,
     source: Option<&str>,
     bin_dir: Option<&str>,
     no_skill: bool,
     channel: &str,
+    name: &str,
 ) -> Result<Data, CarpenterError> {
     let channel = release::Channel::parse(channel)?;
     let cfg = paths
@@ -62,14 +66,14 @@ pub fn upgrade(
     };
     let target_dir = bin_dir.map(PathBuf::from).unwrap_or(cfg.bin_dir);
     std::fs::create_dir_all(&target_dir).map_err(store::io_to_store)?;
-    let dest = target_dir.join("carpenter");
+    let dest = target_dir.join(name);
     let tmp = dest.with_extension("carpenter-tmp");
     std::fs::copy(&built, &tmp).map_err(store::io_to_store)?;
     std::fs::rename(&tmp, &dest).map_err(store::io_to_store)?;
     let skill_outcome = if no_skill {
         None
     } else {
-        Some(skill_outcome_for(paths))
+        Some(skill_outcome_for(paths, name))
     };
     Ok(Data::Upgrade {
         upgraded: true,
@@ -136,7 +140,7 @@ fn build_from_source(source_dir: &Path) -> Result<PathBuf, CarpenterError> {
 /// Refresh the skill of every registered app (skill file present), best-effort:
 /// a failure never fails the upgrade, and no app is registered that wasn't
 /// already (the installer only registers on confirmation — parity).
-fn skill_outcome_for(paths: &Paths) -> Value {
+fn skill_outcome_for(paths: &Paths, name: &str) -> Value {
     let (root, home) = match (paths.xdg_root(), paths.home_dir()) {
         (Ok(r), Ok(h)) => (r, h),
         (Err(e), _) | (_, Err(e)) => {
@@ -145,7 +149,7 @@ fn skill_outcome_for(paths: &Paths) -> Value {
     };
     let registered: Vec<App> = App::all()
         .into_iter()
-        .filter(|app| app.skill_path(root, home).exists())
+        .filter(|app| app.skill_path(root, home, name).exists())
         .collect();
     if registered.is_empty() {
         return json!({"refreshed": false, "reason": "not_registered", "warning": NOT_REGISTERED_WARNING});
@@ -153,7 +157,7 @@ fn skill_outcome_for(paths: &Paths) -> Value {
     Value::Array(
         registered
             .into_iter()
-            .map(|app| match skill::register(app, root, home) {
+            .map(|app| match skill::register(app, root, home, name) {
                 Ok(r) => json!({"refreshed": true, "app": r.app, "path": r.path}),
                 Err(e) => {
                     json!({"refreshed": false, "reason": "refresh_failed", "error": e.to_string()})
@@ -178,6 +182,7 @@ mod tests {
             None,
             true,
             "stable",
+            "carpenter",
         )
         .unwrap_err();
         assert!(matches!(err, CarpenterError::ValidationError(_)));
@@ -187,7 +192,7 @@ mod tests {
     #[test]
     fn upgrade_rejects_unknown_channel() {
         let paths = testutil::meta_setup();
-        let err = upgrade(&paths, None, None, true, "edge").unwrap_err();
+        let err = upgrade(&paths, None, None, true, "edge", "carpenter").unwrap_err();
         assert!(matches!(err, CarpenterError::ValidationError(_)));
         let _ = std::fs::remove_dir_all(&paths.root);
     }
@@ -197,7 +202,7 @@ mod tests {
         let paths = testutil::meta_setup();
         // config source_dir points at a non-dir → ValidationError (proves resolution)
         crate::commands::config::set(&paths, "source_dir", "/definitely/not/here").unwrap();
-        let err = upgrade(&paths, None, None, true, "stable").unwrap_err();
+        let err = upgrade(&paths, None, None, true, "stable", "carpenter").unwrap_err();
         assert!(matches!(err, CarpenterError::ValidationError(_)));
         let _ = std::fs::remove_dir_all(&paths.root);
     }
@@ -217,7 +222,7 @@ mod tests {
             "CARPENTER_DOWNLOAD_BASE",
             format!("file://{}", empty.display()),
         );
-        let err = upgrade(&paths, None, None, true, "stable").unwrap_err();
+        let err = upgrade(&paths, None, None, true, "stable", "carpenter").unwrap_err();
         std::env::remove_var("CARPENTER_DOWNLOAD_BASE");
         assert!(matches!(err, CarpenterError::StoreError(_)), "{err}");
         let _ = std::fs::remove_dir_all(&paths.root);
@@ -235,18 +240,18 @@ mod tests {
         let root = paths.xdg_root().unwrap();
         let home = paths.home_dir().unwrap();
         // nothing registered → single not_registered outcome
-        let out = skill_outcome_for(&paths);
+        let out = skill_outcome_for(&paths, "carpenter");
         assert_eq!(out["reason"], json!("not_registered"));
         // claude-code only → exactly one refresh, for claude-code
-        skill::register(App::ClaudeCode, root, home).unwrap();
-        let out = skill_outcome_for(&paths);
+        skill::register(App::ClaudeCode, root, home, "carpenter").unwrap();
+        let out = skill_outcome_for(&paths, "carpenter");
         let arr = out.as_array().unwrap();
         assert_eq!(arr.len(), 1);
         assert_eq!(arr[0]["app"], json!("claude-code"));
         assert_eq!(arr[0]["refreshed"], json!(true));
         // both registered → two refreshes, order = App::all()
-        skill::register(App::Opencode, root, home).unwrap();
-        let out = skill_outcome_for(&paths);
+        skill::register(App::Opencode, root, home, "carpenter").unwrap();
+        let out = skill_outcome_for(&paths, "carpenter");
         let arr = out.as_array().unwrap();
         assert_eq!(arr.len(), 2);
         assert_eq!(arr[0]["app"], json!("opencode"));

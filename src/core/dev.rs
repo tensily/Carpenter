@@ -208,7 +208,7 @@ pub fn register_local() -> Result<Data, CarpenterError> {
     let skill_dir = root.join("skills").join(skill::NAME);
     std::fs::create_dir_all(&skill_dir).map_err(store::io_to_store)?;
     let skill_path = skill_dir.join("SKILL.md");
-    let content = skill::render()?;
+    let content = skill::render(skill::NAME)?;
     store::atomic_write(&skill_path, content.as_bytes())?;
     Ok(Data::Register {
         app: String::from("opencode"),

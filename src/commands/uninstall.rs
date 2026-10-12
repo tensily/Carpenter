@@ -16,20 +16,26 @@ use crate::core::skill::{self, App};
 use crate::core::store::{self, Paths};
 use crate::models::Data;
 
-/// `uninstall [--bin-dir <p>] [--purge-config]`.
+/// `uninstall [--bin-dir <p>] [--purge-config]`. `name` is the install tag
+/// (adr/027) — the caller resolves it via
+/// [`store::install_name`]; the binary name,
+/// skill dirs, and permission keys all derive from it.
 pub fn uninstall(
     paths: &Paths,
     bin_dir: Option<&str>,
     purge_config: bool,
+    name: &str,
 ) -> Result<Data, CarpenterError> {
     let cfg = paths
         .config_file()
         .map(|p| config::load_from(&p))
         .unwrap_or_default();
     let target_dir = bin_dir.map(PathBuf::from).unwrap_or(cfg.bin_dir);
-    let bin = target_dir.join("carpenter");
+    let bin = target_dir.join(name);
     let (xdg, home) = (paths.xdg_root()?, paths.home_dir()?);
-    let skill_registered = App::all().iter().any(|a| a.skill_path(xdg, home).exists());
+    let skill_registered = App::all()
+        .iter()
+        .any(|a| a.skill_path(xdg, home, name).exists());
     let config_path = paths.config_file();
     if !skill_registered && !bin.exists() {
         return Err(CarpenterError::NotFound(format!(
@@ -37,7 +43,7 @@ pub fn uninstall(
             bin.display()
         )));
     }
-    let skill_outcome = remove_skill(paths);
+    let skill_outcome = remove_skill(paths, name);
     let removed_bin = if bin.exists() {
         std::fs::remove_file(&bin).map_err(store::io_to_store)?;
         Some(bin.display().to_string())
@@ -62,7 +68,7 @@ pub fn uninstall(
 /// Remove the carpenter skill from every registered app, best-effort: a missing
 /// or failing removal never fails the uninstall (mirrors `upgrade`'s
 /// `skill_outcome_for`).
-fn remove_skill(paths: &Paths) -> Value {
+fn remove_skill(paths: &Paths, name: &str) -> Value {
     let (root, home) = match (paths.xdg_root(), paths.home_dir()) {
         (Ok(r), Ok(h)) => (r, h),
         (Err(e), _) | (_, Err(e)) => {
@@ -71,8 +77,8 @@ fn remove_skill(paths: &Paths) -> Value {
     };
     let outcomes: Vec<Value> = App::all()
         .into_iter()
-        .filter(|app| app.skill_path(root, home).exists())
-        .map(|app| match skill::deregister(app, root, home) {
+        .filter(|app| app.skill_path(root, home, name).exists())
+        .map(|app| match skill::deregister(app, root, home, name) {
             Ok(d) => json!({"removed": true, "app": d.app, "path": d.path}),
             Err(e) => json!({"removed": false, "reason": "not_registered", "error": e.to_string()}),
         })
@@ -91,7 +97,8 @@ mod tests {
     #[test]
     fn uninstall_removes_skill_and_binary() {
         let paths = testutil::meta_setup();
-        crate::commands::register::register(&paths, "opencode", false).expect("register");
+        crate::commands::register::register(&paths, "opencode", false, "carpenter")
+            .expect("register");
         let bin_dir = paths.root.join("bin");
         std::fs::create_dir_all(&bin_dir).unwrap();
         let bin = bin_dir.join("carpenter");
@@ -101,7 +108,8 @@ mod tests {
             bin: removed_bin,
             skill,
             config_purged,
-        } = uninstall(&paths, Some(bin_dir.to_str().unwrap()), false).expect("uninstall")
+        } = uninstall(&paths, Some(bin_dir.to_str().unwrap()), false, "carpenter")
+            .expect("uninstall")
         else {
             panic!("Uninstall");
         };
@@ -123,7 +131,8 @@ mod tests {
         std::fs::create_dir_all(&bin_dir).unwrap();
         std::fs::write(bin_dir.join("carpenter"), b"fake binary").unwrap();
         let Data::Uninstall { skill, bin, .. } =
-            uninstall(&paths, Some(bin_dir.to_str().unwrap()), false).expect("uninstall")
+            uninstall(&paths, Some(bin_dir.to_str().unwrap()), false, "carpenter")
+                .expect("uninstall")
         else {
             panic!("Uninstall");
         };
@@ -136,11 +145,13 @@ mod tests {
     #[test]
     fn uninstall_skill_only_reports_null_bin() {
         let paths = testutil::meta_setup();
-        crate::commands::register::register(&paths, "opencode", false).expect("register");
+        crate::commands::register::register(&paths, "opencode", false, "carpenter")
+            .expect("register");
         let bin_dir = paths.root.join("empty-bin");
         std::fs::create_dir_all(&bin_dir).unwrap();
         let Data::Uninstall { bin, skill, .. } =
-            uninstall(&paths, Some(bin_dir.to_str().unwrap()), false).expect("uninstall")
+            uninstall(&paths, Some(bin_dir.to_str().unwrap()), false, "carpenter")
+                .expect("uninstall")
         else {
             panic!("Uninstall");
         };
@@ -156,7 +167,8 @@ mod tests {
         let paths = testutil::meta_setup();
         let bin_dir = paths.root.join("bin");
         std::fs::create_dir_all(&bin_dir).unwrap();
-        let err = uninstall(&paths, Some(bin_dir.to_str().unwrap()), false).unwrap_err();
+        let err =
+            uninstall(&paths, Some(bin_dir.to_str().unwrap()), false, "carpenter").unwrap_err();
         assert!(matches!(err, CarpenterError::NotFound(_)), "{err:?}");
         let _ = std::fs::remove_dir_all(&paths.root);
     }
@@ -164,10 +176,12 @@ mod tests {
     #[test]
     fn uninstall_bin_path_is_directory_is_store_error() {
         let paths = testutil::meta_setup();
-        crate::commands::register::register(&paths, "opencode", false).expect("register");
+        crate::commands::register::register(&paths, "opencode", false, "carpenter")
+            .expect("register");
         let bin_dir = paths.root.join("bin");
         std::fs::create_dir_all(bin_dir.join("carpenter")).unwrap();
-        let err = uninstall(&paths, Some(bin_dir.to_str().unwrap()), false).unwrap_err();
+        let err =
+            uninstall(&paths, Some(bin_dir.to_str().unwrap()), false, "carpenter").unwrap_err();
         assert!(matches!(err, CarpenterError::StoreError(_)), "{err:?}");
         let _ = std::fs::remove_dir_all(&paths.root);
     }
@@ -184,7 +198,8 @@ mod tests {
         }
         std::fs::write(&cfg, b"{}").unwrap();
         let Data::Uninstall { config_purged, .. } =
-            uninstall(&paths, Some(bin_dir.to_str().unwrap()), false).expect("keep config")
+            uninstall(&paths, Some(bin_dir.to_str().unwrap()), false, "carpenter")
+                .expect("keep config")
         else {
             panic!("Uninstall");
         };
@@ -192,7 +207,8 @@ mod tests {
         assert!(cfg.exists(), "config must survive without --purge-config");
         std::fs::write(bin_dir.join("carpenter"), b"fake binary").unwrap();
         let Data::Uninstall { config_purged, .. } =
-            uninstall(&paths, Some(bin_dir.to_str().unwrap()), true).expect("purge config")
+            uninstall(&paths, Some(bin_dir.to_str().unwrap()), true, "carpenter")
+                .expect("purge config")
         else {
             panic!("Uninstall");
         };
@@ -204,13 +220,16 @@ mod tests {
     #[test]
     fn uninstall_removes_both_registered_apps() {
         let paths = testutil::meta_setup();
-        crate::commands::register::register(&paths, "opencode", false).expect("register");
-        crate::commands::register::register(&paths, "claude-code", false).expect("register");
+        crate::commands::register::register(&paths, "opencode", false, "carpenter")
+            .expect("register");
+        crate::commands::register::register(&paths, "claude-code", false, "carpenter")
+            .expect("register");
         let bin_dir = paths.root.join("bin");
         std::fs::create_dir_all(&bin_dir).unwrap();
         std::fs::write(bin_dir.join("carpenter"), b"fake binary").unwrap();
         let Data::Uninstall { skill, .. } =
-            uninstall(&paths, Some(bin_dir.to_str().unwrap()), false).expect("uninstall")
+            uninstall(&paths, Some(bin_dir.to_str().unwrap()), false, "carpenter")
+                .expect("uninstall")
         else {
             panic!("Uninstall");
         };
@@ -227,7 +246,47 @@ mod tests {
         let _ = std::fs::remove_dir_all(&paths.root);
     }
 
+    #[test]
+    fn uninstall_is_tagged_by_the_install_name() {
+        let paths = testutil::meta_setup();
+        crate::commands::register::register(&paths, "opencode", false, "carpenter-ivan-topic")
+            .expect("register");
+        let bin_dir = paths.root.join("bin");
+        std::fs::create_dir_all(&bin_dir).unwrap();
+        let bin = bin_dir.join("carpenter-ivan-topic");
+        std::fs::write(&bin, b"fake binary").unwrap();
+        let Data::Uninstall {
+            bin: removed,
+            skill,
+            ..
+        } = uninstall(
+            &paths,
+            Some(bin_dir.to_str().unwrap()),
+            false,
+            "carpenter-ivan-topic",
+        )
+        .expect("uninstall")
+        else {
+            panic!("Uninstall");
+        };
+        assert_eq!(removed.as_deref(), Some(bin.to_str().unwrap()));
+        assert!(!bin.exists(), "tagged binary should be gone");
+        let arr = skill.as_array().expect("per-app outcomes");
+        assert_eq!(arr.len(), 1);
+        assert_eq!(arr[0]["removed"], json!(true));
+        assert!(!paths
+            .xdg_root()
+            .unwrap()
+            .join("opencode/skills/carpenter-ivan-topic")
+            .exists());
+        let _ = std::fs::remove_dir_all(paths.root);
+    }
+
     fn skill_path_of(paths: &Paths) -> std::path::PathBuf {
-        App::Opencode.skill_path(paths.xdg_root().unwrap(), paths.home_dir().unwrap())
+        App::Opencode.skill_path(
+            paths.xdg_root().unwrap(),
+            paths.home_dir().unwrap(),
+            "carpenter",
+        )
     }
 }

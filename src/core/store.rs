@@ -69,9 +69,40 @@ pub fn resolve_root(root: Option<&Path>) -> PathBuf {
     }
 }
 
-/// The carpenter app config directory (`~/.config/carpenter` on Linux).
+/// The carpenter app config directory (`~/.config/carpenter` on Linux), named
+/// for the install ([`install_name`]) — a branch-tagged binary gets its own
+/// dir, so two installs never share state (adr/027).
 pub fn config_dir() -> Option<PathBuf> {
-    dirs::config_dir().map(|d| d.join("carpenter"))
+    dirs::config_dir().map(|d| d.join(install_name()))
+}
+
+/// The install identity: a kebab-case tag every surface of an install derives
+/// from — config dir, skill name/dir, opencode permission key, binary name.
+/// Resolution order: `CARPENTER_INSTALL_NAME` (tests pin it; a user can too),
+/// else the running binary's file stem (a branch install `carpenter-ivan-topic`
+/// tags itself automatically). The stock `carpenter` stem maps to itself, so
+/// plain installs resolve exactly the pre-adr/027 paths (adr/027).
+pub fn install_name() -> String {
+    let override_name = std::env::var("CARPENTER_INSTALL_NAME")
+        .ok()
+        .filter(|s| !s.is_empty());
+    let stem = override_name.or_else(|| {
+        std::env::current_exe()
+            .ok()
+            .and_then(|p| p.file_stem().map(|s| s.to_string_lossy().into_owned()))
+    });
+    install_name_from(stem.as_deref())
+}
+
+/// Pure core of [`install_name`]: sanitize a binary stem into the install tag.
+/// The ` (deleted)` suffix (kernel artifact of upgrade's in-place replace —
+/// see `skill::strip_deleted`) is stripped; [`slugify`] does the kebab
+/// collapse; a missing or unsanitizable stem falls back to `carpenter`.
+pub fn install_name_from(stem: Option<&str>) -> String {
+    const DEFAULT: &str = "carpenter";
+    let stem = stem.unwrap_or(DEFAULT);
+    let stem = stem.strip_suffix(" (deleted)").unwrap_or(stem);
+    slugify(stem).unwrap_or_else(|_| DEFAULT.to_string())
 }
 
 /// The user home directory (`~` — claude-code's `~/.claude` anchor).
@@ -307,10 +338,41 @@ fn slugify_no_alnums_is_validation_error() {
 
 #[cfg(test)]
 #[test]
-fn config_dir_is_under_carpenter_when_present() {
+fn config_dir_is_named_for_the_install() {
     if let Some(d) = config_dir() {
-        assert!(d.ends_with("carpenter"));
+        assert_eq!(d.file_name().unwrap().to_string_lossy(), install_name());
     }
+}
+
+#[cfg(test)]
+#[test]
+fn install_name_stock_binary_maps_to_itself() {
+    assert_eq!(install_name_from(Some("carpenter")), "carpenter");
+    assert_eq!(install_name_from(None), "carpenter");
+}
+
+#[cfg(test)]
+#[test]
+fn install_name_branch_stems_are_kebab_tagged() {
+    assert_eq!(
+        install_name_from(Some("carpenter-ivan-topic")),
+        "carpenter-ivan-topic"
+    );
+    assert_eq!(install_name_from(Some("ivan_feature")), "ivan-feature");
+    assert_eq!(install_name_from(Some("Feature.Branch")), "feature-branch");
+}
+
+#[cfg(test)]
+#[test]
+fn install_name_strips_deleted_and_falls_back() {
+    // upgrade's in-place replace makes the kernel report ` (deleted)`
+    assert_eq!(install_name_from(Some("carpenter (deleted)")), "carpenter");
+    assert_eq!(
+        install_name_from(Some("carpenter-ivan-x (deleted)")),
+        "carpenter-ivan-x"
+    );
+    // a stem with no alphanumerics cannot be a tag — stock fallback
+    assert_eq!(install_name_from(Some("!!!")), "carpenter");
 }
 
 #[cfg(test)]

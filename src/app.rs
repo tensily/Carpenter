@@ -703,11 +703,17 @@ fn dispatch(paths: &Paths, matches: &ArgMatches) -> Result<Data, core::error::Ca
                 m.get_one::<String>("channel")
                     .map(|s| s.as_str())
                     .unwrap_or("stable"),
+                &core::store::install_name(),
             )
         }
         Some(("uninstall", m)) => {
             let bin_dir = m.get_one::<String>("bin-dir").map(|s| s.as_str());
-            commands::uninstall::uninstall(paths, bin_dir, m.get_flag("purge-config"))
+            commands::uninstall::uninstall(
+                paths,
+                bin_dir,
+                m.get_flag("purge-config"),
+                &core::store::install_name(),
+            )
         }
         Some(("link", sub)) => link_cmd(paths, sub),
         #[cfg(feature = "dev")]
@@ -1077,11 +1083,16 @@ fn config_cmd(paths: &Paths, sub: &ArgMatches) -> Result<Data, core::error::Carp
 }
 
 fn register_cmd(paths: &Paths, m: &ArgMatches) -> Result<Data, core::error::CarpenterError> {
-    commands::register::register(paths, &arg_string(m, "app"), m.get_flag("print-skill"))
+    commands::register::register(
+        paths,
+        &arg_string(m, "app"),
+        m.get_flag("print-skill"),
+        &core::store::install_name(),
+    )
 }
 
 fn deregister_cmd(paths: &Paths, m: &ArgMatches) -> Result<Data, core::error::CarpenterError> {
-    commands::deregister::deregister(paths, &arg_string(m, "app"))
+    commands::deregister::deregister(paths, &arg_string(m, "app"), &core::store::install_name())
 }
 
 fn link_cmd(paths: &Paths, sub: &ArgMatches) -> Result<Data, core::error::CarpenterError> {
