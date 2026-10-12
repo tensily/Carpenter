@@ -13,6 +13,7 @@ pub mod feature;
 pub mod goal;
 pub mod howto;
 pub mod install;
+pub mod installs;
 pub mod lesson;
 pub mod link;
 pub mod notes;

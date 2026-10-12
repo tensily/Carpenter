@@ -7,8 +7,8 @@
 //! co-located prose.
 
 use crate::models::{
-    build, config, course, goal, issue, lesson, link, note, plan, progress, quiz, register, skip,
-    venv, Data,
+    build, config, course, goal, installs, issue, lesson, link, note, plan, progress, quiz,
+    register, skip, venv, Data,
 };
 
 /// A generated spec-table entry keyed to a `docs/specs/` file.
@@ -44,6 +44,7 @@ pub fn all() -> Vec<SpecEntry> {
         register_output_entry(),
         build_output_entry(),
         link_output_entry(),
+        installs_output_entry(),
     ]
 }
 
@@ -69,6 +70,7 @@ pub fn envelope_examples() -> Vec<(&'static str, Data)> {
         register::examples::rows(),
         build::examples::rows(),
         link::examples::rows(),
+        installs::examples::rows(),
     ] {
         for (cmd, _input, _note, data) in rows {
             out.push((cmd, data));
@@ -300,6 +302,13 @@ fn link_output_entry() -> SpecEntry {
     SpecEntry {
         file: "17-link.md",
         markdown: output_table(link::examples::rows()),
+    }
+}
+
+fn installs_output_entry() -> SpecEntry {
+    SpecEntry {
+        file: "24-installs.md",
+        markdown: output_table(installs::examples::rows()),
     }
 }
 

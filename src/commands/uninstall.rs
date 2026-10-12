@@ -4,21 +4,18 @@
 //! Ordering: skill first (recoverable via `register`), binary last (point of
 //! no return). Removing the running binary is safe on Linux/macOS — unlink
 //! keeps the inode alive for the running process (the same property
-//! `upgrade`'s copy-replace relies on). Course data is never touched.
+//! `upgrade`'s copy-replace relies on). Course data is never touched. The
+//! mechanics live in [`core::installs`](crate::core::installs) — shared with
+//! `installs remove`.
 
-use std::path::PathBuf;
-
-use serde_json::{json, Value};
-
-use crate::core::config;
 use crate::core::error::CarpenterError;
-use crate::core::skill::{self, App};
-use crate::core::store::{self, Paths};
+use crate::core::installs;
+use crate::core::store::Paths;
 use crate::models::Data;
 
 /// `uninstall [--bin-dir <p>] [--purge-config]`. `name` is the install tag
 /// (adr/027) — the caller resolves it via
-/// [`store::install_name`]; the binary name,
+/// [`store::install_name`](crate::core::store::install_name); the binary name,
 /// skill dirs, and permission keys all derive from it.
 pub fn uninstall(
     paths: &Paths,
@@ -26,73 +23,21 @@ pub fn uninstall(
     purge_config: bool,
     name: &str,
 ) -> Result<Data, CarpenterError> {
-    let cfg = paths
-        .config_file()
-        .map(|p| config::load_from(&p))
-        .unwrap_or_default();
-    let target_dir = bin_dir.map(PathBuf::from).unwrap_or(cfg.bin_dir);
-    let bin = target_dir.join(name);
-    let (xdg, home) = (paths.xdg_root()?, paths.home_dir()?);
-    let skill_registered = App::all()
-        .iter()
-        .any(|a| a.skill_path(xdg, home, name).exists());
-    let config_path = paths.config_file();
-    if !skill_registered && !bin.exists() {
-        return Err(CarpenterError::NotFound(format!(
-            "carpenter is not installed (no registered skill and no binary at {})",
-            bin.display()
-        )));
-    }
-    let skill_outcome = remove_skill(paths, name);
-    let removed_bin = if bin.exists() {
-        std::fs::remove_file(&bin).map_err(store::io_to_store)?;
-        Some(bin.display().to_string())
-    } else {
-        None
-    };
-    let config_purged = if purge_config {
-        config_path
-            .map(|p| p.exists() && std::fs::remove_file(&p).map_err(store::io_to_store).is_ok())
-            .unwrap_or(false)
-    } else {
-        false
-    };
+    let r = installs::remove(paths, bin_dir, purge_config, name)?;
     Ok(Data::Uninstall {
         uninstalled: true,
-        bin: removed_bin,
-        skill: skill_outcome,
-        config_purged,
+        bin: r.bin,
+        skill: r.skill,
+        config_purged: r.config_purged,
     })
-}
-
-/// Remove the carpenter skill from every registered app, best-effort: a missing
-/// or failing removal never fails the uninstall (mirrors `upgrade`'s
-/// `skill_outcome_for`).
-fn remove_skill(paths: &Paths, name: &str) -> Value {
-    let (root, home) = match (paths.xdg_root(), paths.home_dir()) {
-        (Ok(r), Ok(h)) => (r, h),
-        (Err(e), _) | (_, Err(e)) => {
-            return json!({"removed": false, "reason": "no_anchor", "error": e.to_string()})
-        }
-    };
-    let outcomes: Vec<Value> = App::all()
-        .into_iter()
-        .filter(|app| app.skill_path(root, home, name).exists())
-        .map(|app| match skill::deregister(app, root, home, name) {
-            Ok(d) => json!({"removed": true, "app": d.app, "path": d.path}),
-            Err(e) => json!({"removed": false, "reason": "not_registered", "error": e.to_string()}),
-        })
-        .collect();
-    if outcomes.is_empty() {
-        return json!({"removed": false, "reason": "not_registered"});
-    }
-    Value::Array(outcomes)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::commands::testutil;
+    use crate::core::skill::App;
+    use serde_json::json;
 
     #[test]
     fn uninstall_removes_skill_and_binary() {
@@ -279,7 +224,7 @@ mod tests {
             .unwrap()
             .join("opencode/skills/carpenter-ivan-topic")
             .exists());
-        let _ = std::fs::remove_dir_all(paths.root);
+        let _ = std::fs::remove_dir_all(&paths.root);
     }
 
     fn skill_path_of(paths: &Paths) -> std::path::PathBuf {

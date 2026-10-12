@@ -8,6 +8,7 @@ pub mod data;
 pub mod examples;
 pub mod execute;
 pub mod goal;
+pub mod installs;
 pub mod issue;
 pub mod lesson;
 pub mod link;

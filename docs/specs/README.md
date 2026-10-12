@@ -32,3 +32,4 @@ landed yet keeps a hand table (no markers) until its phase ships. Pure-prose fil
 - [21-register-deregister.md](21-register-deregister.md) — agent-app skill integration
 - [22-venv.md](22-venv.md) — uv-managed course venv
 - [23-skip.md](23-skip.md) — top-level `skip` command (sets `skip` columns)
+- [24-installs.md](24-installs.md) — discover and remove carpenter installs by tag (adr/027)

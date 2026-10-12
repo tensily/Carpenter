@@ -587,6 +587,24 @@ pub enum Data {
         /// whether the config file was removed (`--purge-config`).
         config_purged: bool,
     },
+    /// `installs list`.
+    InstallsList {
+        /// one row per discovered install, sorted by tag.
+        installs: Vec<crate::models::installs::InstallRow>,
+    },
+    /// `installs remove <tag>`.
+    InstallsRemove {
+        /// always true.
+        removed: bool,
+        /// the install tag that was removed.
+        tag: String,
+        /// removed binary path (`null` if it was not present).
+        bin: Option<String>,
+        /// skill removal outcome (same shape as `uninstall`).
+        skill: serde_json::Value,
+        /// whether the config file was removed (`--purge-config`).
+        config_purged: bool,
+    },
     // ---- link ----
     /// `link register`.
     LinkRegister {
@@ -708,6 +726,8 @@ impl Data {
                 Some(b) => format!("uninstalled: {b}"),
                 None => String::from("uninstalled"),
             },
+            Self::InstallsList { .. } => String::from("installs listed"),
+            Self::InstallsRemove { tag, .. } => format!("install removed: {tag}"),
             Self::LinkRegister { .. } => String::from("link manifest emitted"),
             #[cfg(feature = "dev")]
             Self::DevCheck { .. } => String::from("dev prerequisites checked"),

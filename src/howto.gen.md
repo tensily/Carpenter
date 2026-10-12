@@ -1398,6 +1398,62 @@ Result (one envelope on stdout):
 
 Inverse of `install`: removes the skill of every **registered** app (best-effort — `{"removed":false,"reason":"not_registered"}` when none), then deletes `<bin_dir>/carpenter` (safe while running on Linux/macOS). `NotFound` when neither skill nor binary exists. `--purge-config` also removes the config file; course data is never touched.
 
+## installs
+
+Discover and remove carpenter installs by tag (adr/027).
+
+_flags: none_
+
+### list
+
+List carpenter installs (binaries ∪ skills ∪ data dirs).
+
+- `--bin-dir <PATH>` — Bin dir (default: config bin_dir → ~/.local/bin).
+
+**example:**
+
+```sh
+carpenter installs list
+```
+
+Result (one envelope on stdout):
+```json
+{"status":"ok","message":"installs listed","data":{"installs":[{"tag":"carpenter","bin":"/home/u/.local/bin/carpenter","skill_apps":["opencode"],"data_dir":"/home/u/.config/carpenter"},{"tag":"carpenter-ivan-topic","bin":"/home/u/.local/bin/carpenter-ivan-topic","skill_apps":["opencode"],"data_dir":"/home/u/.config/carpenter-ivan-topic"}]}}
+```
+
+Discovers every carpenter install on this machine, keyed by its **tag** (the
+binary's file stem — adr/027): `carpenter` is the stock install; a branch
+install carries its branch name. The union of `carpenter*` binaries in
+`bin_dir`, registered skill dirs under either agent app, and data dirs under
+the config base; sorted by tag. A row's `data_dir` is the path the tag derives
+to even when it does not exist yet, and `bin` is `null` when only a skill or
+data dir remains.
+
+### remove
+
+Uninstall any carpenter install by tag (skill + binary + config purge).
+
+- `--bin-dir <PATH>` — Bin dir (default: config bin_dir → ~/.local/bin).
+- `--purge-config` — Also remove the target install's config file.
+
+**example:**
+
+```sh
+carpenter installs remove carpenter-ivan-topic
+```
+
+Result (one envelope on stdout):
+```json
+{"status":"ok","message":"install removed: carpenter-ivan-topic","data":{"removed":true,"tag":"carpenter-ivan-topic","bin":"/home/u/.local/bin/carpenter-ivan-topic","skill":[{"app":"opencode","path":"/home/u/.config/opencode/skills/carpenter-ivan-topic/SKILL.md","removed":true}],"config_purged":false}}
+```
+
+Generic uninstall: removes **any** install by tag — the tagged binary, its
+skill from every app that registered it, and (with `--purge-config`) its
+config file — regardless of which carpenter is running the command. Same
+adr/019 semantics as `uninstall` (course data is never touched; `NotFound`
+when the tag has neither skill nor binary); the tag must be kebab-case
+(`^[a-z0-9]+(-[a-z0-9]+)*$`, max 60).
+
 ## link
 
 Link manifest commands (future CLI registry).

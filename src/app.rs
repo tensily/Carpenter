@@ -110,6 +110,42 @@ pub fn cli() -> Command {
                 ),
         )
         .subcommand(
+            Command::new("installs")
+                .about("Discover and remove carpenter installs by tag (adr/027).")
+                .subcommand(
+                    Command::new("list")
+                        .about("List carpenter installs (binaries ∪ skills ∪ data dirs).")
+                        .arg(
+                            Arg::new("bin-dir")
+                                .long("bin-dir")
+                                .value_name("PATH")
+                                .help("Bin dir (default: config bin_dir → ~/.local/bin)."),
+                        ),
+                )
+                .subcommand(
+                    Command::new("remove")
+                        .about("Uninstall any carpenter install by tag (skill + binary + config purge).")
+                        .arg(
+                            Arg::new("tag")
+                                .value_name("TAG")
+                                .required(true)
+                                .help("Install tag: the binary stem (carpenter, carpenter-<branch>)."),
+                        )
+                        .arg(
+                            Arg::new("bin-dir")
+                                .long("bin-dir")
+                                .value_name("PATH")
+                                .help("Bin dir (default: config bin_dir → ~/.local/bin)."),
+                        )
+                        .arg(
+                            Arg::new("purge-config")
+                                .long("purge-config")
+                                .action(ArgAction::SetTrue)
+                                .help("Also remove the target install's config file."),
+                        ),
+                ),
+        )
+        .subcommand(
             Command::new("link")
                 .about("Link manifest commands (future CLI registry).")
                 .subcommand(Command::new("register").about("Emit the carpenter link manifest.")),
@@ -716,6 +752,7 @@ fn dispatch(paths: &Paths, matches: &ArgMatches) -> Result<Data, core::error::Ca
             )
         }
         Some(("link", sub)) => link_cmd(paths, sub),
+        Some(("installs", sub)) => installs_cmd(paths, sub),
         #[cfg(feature = "dev")]
         Some(("dev", sub)) => dev_cmd(sub),
         _ => Err(core::error::CarpenterError::ValidationError(
@@ -1093,6 +1130,28 @@ fn register_cmd(paths: &Paths, m: &ArgMatches) -> Result<Data, core::error::Carp
 
 fn deregister_cmd(paths: &Paths, m: &ArgMatches) -> Result<Data, core::error::CarpenterError> {
     commands::deregister::deregister(paths, &arg_string(m, "app"), &core::store::install_name())
+}
+
+fn installs_cmd(paths: &Paths, sub: &ArgMatches) -> Result<Data, core::error::CarpenterError> {
+    match sub.subcommand() {
+        Some(("list", m)) => {
+            let bin_dir = m.get_one::<String>("bin-dir").map(|s| s.as_str());
+            commands::installs::list(paths, bin_dir)
+        }
+        Some(("remove", m)) => {
+            let bin_dir = m.get_one::<String>("bin-dir").map(|s| s.as_str());
+            commands::installs::remove(
+                paths,
+                &arg_string(m, "tag"),
+                bin_dir,
+                m.get_flag("purge-config"),
+            )
+        }
+        _ => Err(core::error::CarpenterError::ValidationError(format!(
+            "unknown installs subcommand: {:?}",
+            sub.subcommand_name().unwrap_or("(none)")
+        ))),
+    }
 }
 
 fn link_cmd(paths: &Paths, sub: &ArgMatches) -> Result<Data, core::error::CarpenterError> {
