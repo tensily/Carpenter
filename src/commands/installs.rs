@@ -198,6 +198,43 @@ mod tests {
         let _ = std::fs::remove_dir_all(&paths.root);
     }
 
+    #[test]
+    fn list_and_remove_understand_underscored_command_names() {
+        let paths = testutil::meta_setup();
+        let bin_dir = paths.root.join("bin");
+        std::fs::create_dir_all(&bin_dir).unwrap();
+        std::fs::write(bin_dir.join("carpenter_nightly"), b"fake").unwrap();
+        std::fs::write(bin_dir.join("carpenter_ivan_topic"), b"fake").unwrap();
+        let Data::InstallsList { installs } =
+            list(&paths, Some(bin_dir.to_str().unwrap())).expect("list")
+        else {
+            panic!("InstallsList");
+        };
+        let tags: Vec<&str> = installs.iter().map(|r| r.tag.as_str()).collect();
+        // underscored stems slugify onto the kebab identity (adr/027)
+        assert_eq!(
+            tags,
+            vec!["carpenter-ivan-topic", "carpenter-nightly"],
+            "{tags:?}"
+        );
+        // removal by tag finds the underscored file
+        let Data::InstallsRemove { bin: removed, .. } = remove(
+            &paths,
+            "carpenter-nightly",
+            Some(bin_dir.to_str().unwrap()),
+            false,
+        )
+        .expect("remove") else {
+            panic!("InstallsRemove");
+        };
+        assert_eq!(
+            removed.as_deref(),
+            Some(bin_dir.join("carpenter_nightly").to_str().unwrap())
+        );
+        assert!(!bin_dir.join("carpenter_nightly").exists());
+        let _ = std::fs::remove_dir_all(&paths.root);
+    }
+
     // guard: skill_path signature stays name-parameterized (adr/027)
     #[test]
     fn skill_paths_carry_the_tag() {

@@ -45,9 +45,12 @@ pub fn list(bin_dir: &Path, xdg: &Path, home: &Path) -> Vec<DiscoveredInstall> {
     };
     let bin_tag = |p: &Path| -> Option<String> {
         let stem = p.file_stem()?.to_string_lossy().into_owned();
-        (stem == skill::NAME || stem.starts_with(&format!("{}-", skill::NAME)))
-            .then_some(stem)
-            .filter(|s| skill::name_is_valid(s))
+        // binaries carry the tag as kebab (`carpenter-nightly`) or as the
+        // underscored command name (`carpenter_nightly`, adr/027)
+        let is_install = stem == skill::NAME
+            || stem.starts_with(&format!("{}-", skill::NAME))
+            || stem.starts_with(&format!("{}_", skill::NAME));
+        is_install.then(|| store::install_name_from(Some(&stem)))
     };
     if let Ok(entries) = std::fs::read_dir(bin_dir) {
         for e in entries.flatten() {
@@ -113,7 +116,8 @@ pub struct Removed {
 }
 
 /// Remove the install `name` (tag): skill of every registered app (best-effort),
-/// then `<bin_dir>/<name>`, then the config file with `purge_config`
+/// then the install's binary (the underscored command name or the kebab stem —
+/// whichever exists), then the config file with `purge_config`
 /// ([adr/019] semantics — course data is never touched). `NotFound` when
 /// neither skill nor binary exists.
 pub fn remove(
@@ -127,7 +131,8 @@ pub fn remove(
         .map(|p| crate::core::config::load_from(&p))
         .unwrap_or_default();
     let target_dir = bin_dir.map(PathBuf::from).unwrap_or(cfg.bin_dir);
-    let bin = target_dir.join(name);
+    let bin = find_binary(&target_dir, name)
+        .unwrap_or_else(|| target_dir.join(store::binary_file_name(name)));
     let (xdg, home) = (paths.xdg_root()?, paths.home_dir()?);
     let skill_registered = App::all()
         .iter()
@@ -158,6 +163,32 @@ pub fn remove(
         skill,
         config_purged,
     })
+}
+
+/// Locate an install's binary in `dir` for the tag `name`: the underscored
+/// command name first, then the bare kebab tag, then any file whose stem
+/// slugifies to the tag (manual renames). Deterministic (sorted scan).
+fn find_binary(dir: &Path, name: &str) -> Option<PathBuf> {
+    for candidate in [store::binary_file_name(name), name.to_string()] {
+        let p = dir.join(&candidate);
+        if p.is_file() {
+            return Some(p);
+        }
+    }
+    let mut hits: Vec<PathBuf> = std::fs::read_dir(dir)
+        .ok()?
+        .flatten()
+        .map(|e| e.path())
+        .filter(|p| {
+            p.is_file()
+                && p.file_stem()
+                    .map(|s| store::install_name_from(s.to_str()))
+                    .as_deref()
+                    == Some(name)
+        })
+        .collect();
+    hits.sort();
+    hits.into_iter().next()
 }
 
 /// Remove the skill of every app registered for `name`, best-effort: a missing

@@ -82,7 +82,7 @@ fn install_sh_prints_plan_and_proceeds_non_interactive() {
     let fixture = release_fixture(target);
     let root = setup("install-plan");
     stub_opencode(&root);
-    let bin = root.join("bin").join("carpenter");
+    let bin = root.join("bin").join("carpenter_nightly");
 
     let out = run_installer(&installer_script(), &root, &fixture);
     assert!(
@@ -230,7 +230,7 @@ fn install_sh_enter_defaults_proceed_and_register() {
         "Enter at the register prompt registers: {text}"
     );
     assert!(
-        bin_dir.join("carpenter").is_file(),
+        bin_dir.join("carpenter_nightly").is_file(),
         "Enter at the consent prompt installs the binary"
     );
     let (skill_md, _perms) = common::opencode_paths(&root);

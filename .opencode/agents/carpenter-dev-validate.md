@@ -30,6 +30,10 @@ permission:
     "cargo build *": "allow"
     "./target/debug/carpenter *": "allow"
     "./target/release/carpenter *": "allow"
+    "gh pr comment *": "allow"
+    "gh pr view *": "allow"
+    "gh pr checks *": "allow"
+    "gh run view *": "allow"
   task:
     "*": "deny"
   external_directory:

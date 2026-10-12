@@ -26,6 +26,17 @@ TAG="nightly"
 BASE="${CARPENTER_DOWNLOAD_BASE:-https://github.com/${REPO}/releases/download/${TAG}}"
 INSTALL_DIR="${CARPENTER_INSTALL_DIR:-${HOME}/.local/bin}"
 
+# Command name by channel (adr/027): only the stable release (a tag-patched
+# copy, TAG="vX.Y.Z") keeps `carpenter`; nightly installs as `carpenter_nightly`
+# so the two coexist. The skill/data identity stays kebab (`carpenter-nightly`)
+# — agent-app skill names forbid `_`.
+BIN_NAME="carpenter"
+SKILL_TAG="carpenter"
+if [ "$TAG" = nightly ]; then
+    BIN_NAME="carpenter_nightly"
+    SKILL_TAG="carpenter-nightly"
+fi
+
 say() { printf '%scarpenter:%s %s\n' "$AMBER" "$RESET" "$1"; }
 die() { printf '%scarpenter: error:%s %s\n' "$BAD" "$RESET" "$1" >&2; exit 1; }
 abort_install() {
@@ -90,9 +101,9 @@ done
 skill_path() { # $1 = app → the SKILL.md the installer would write
     case "$1" in
         opencode)
-            printf '%s/opencode/skills/carpenter/SKILL.md' "${XDG_CONFIG_HOME:-${HOME}/.config}" ;;
+            printf '%s/opencode/skills/%s/SKILL.md' "${XDG_CONFIG_HOME:-${HOME}/.config}" "$SKILL_TAG" ;;
         claude-code)
-            printf '%s/.claude/skills/carpenter/SKILL.md' "${HOME}" ;;
+            printf '%s/.claude/skills/%s/SKILL.md' "${HOME}" "$SKILL_TAG" ;;
     esac
 }
 
@@ -127,15 +138,15 @@ printf '  %sdownload%s  %s%s%s\n' "$MUTED" "$RESET" "$CREAM" "$tarball" "$RESET"
 printf '      %sfrom%s  %s%s%s\n' "$MUTED" "$RESET" "$CREAM" "$BASE" "$RESET"
 printf '  %sverify%s    %sSHA256SUMS checksum (%s)%s\n' \
     "$MUTED" "$RESET" "$CREAM" "$checksum" "$RESET"
-printf '  %sinstall%s   %s%s/carpenter%s\n' \
-    "$MUTED" "$RESET" "$CREAM" "$INSTALL_DIR" "$RESET"
+printf '  %sinstall%s   %s%s/%s%s\n' \
+    "$MUTED" "$RESET" "$CREAM" "$INSTALL_DIR" "$BIN_NAME" "$RESET"
 if [ -n "$apps" ]; then
     # shellcheck disable=SC2086  # apps is a deliberate word list
     for app in $apps; do
         printf '  %sregister%s  %s%s%s -> %s%s%s\n' \
             "$MUTED" "$RESET" "$CREAM" "$app" "$RESET" "$CREAM" "$(skill_path "$app")" "$RESET"
         if [ "$app" = "opencode" ]; then
-            printf '             %s+ permission "skill.carpenter": allow in opencode.json%s\n' "$CREAM" "$RESET"
+            printf '             %s+ permission "skill.%s": allow in opencode.json%s\n' "$CREAM" "$SKILL_TAG" "$RESET"
         fi
     done
 else
@@ -191,8 +202,8 @@ tar -xzf "${tmp}/${tarball}" -C "$tmp" || die "extract failed: ${tarball}"
 [ -f "${tmp}/carpenter" ] || die "tarball does not contain a 'carpenter' binary"
 
 mkdir -p "$INSTALL_DIR" || die "cannot create ${INSTALL_DIR}"
-install -m755 "${tmp}/carpenter" "${INSTALL_DIR}/carpenter" \
-    || die "cannot write ${INSTALL_DIR}/carpenter (permissions?)"
+install -m755 "${tmp}/carpenter" "${INSTALL_DIR}/${BIN_NAME}" \
+    || die "cannot write ${INSTALL_DIR}/${BIN_NAME} (permissions?)"
 
 # Register the skill into detected apps. Interactive (a TTY is attached):
 # ask y/n per detected app, one by one. Non-interactive (CI, `curl | sh` under
@@ -208,11 +219,11 @@ ask_register() { # $1 = app label → Y/n from the user (Enter registers)
 }
 
 do_register() { # $1 = --app value, $2 = label for notes
-    if "${INSTALL_DIR}/carpenter" self register --app "$1" >/dev/null 2>&1; then
+    if "${INSTALL_DIR}/${BIN_NAME}" self register --app "$1" >/dev/null 2>&1; then
         say "registered in $2 (skill)"
     else
         printf 'carpenter: note: register failed; run manually: %s self register --app %s\n' \
-            "${INSTALL_DIR}/carpenter" "$1" >&2
+            "${INSTALL_DIR}/${BIN_NAME}" "$1" >&2
     fi
 }
 
@@ -237,9 +248,9 @@ fi
 # --- summary: what just landed on this machine -------------------------------
 printf '\n'
 printf '%s✓%s %schecksum verified (%s)%s\n' "$GOOD" "$RESET" "$CREAM" "$checksum" "$RESET"
-ver=$("${INSTALL_DIR}/carpenter" --version 2>/dev/null || echo carpenter)
-printf '%s✓%s %sinstalled %s -> %s/carpenter%s\n' \
-    "$GOOD" "$RESET" "$CREAM" "$ver" "$INSTALL_DIR" "$RESET"
+ver=$("${INSTALL_DIR}/${BIN_NAME}" --version 2>/dev/null || echo carpenter)
+printf '%s✓%s %sinstalled %s -> %s/%s%s\n' \
+    "$GOOD" "$RESET" "$CREAM" "$ver" "$INSTALL_DIR" "$BIN_NAME" "$RESET"
 if ! on_path; then
     # shellcheck disable=SC2016  # $PATH prints literally — it's the hint's text
     printf '%s!%s %s%s is not on PATH; add it: export PATH="%s:$PATH"%s\n' \

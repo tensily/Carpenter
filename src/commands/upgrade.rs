@@ -66,7 +66,18 @@ pub fn upgrade(
     };
     let target_dir = bin_dir.map(PathBuf::from).unwrap_or(cfg.bin_dir);
     std::fs::create_dir_all(&target_dir).map_err(store::io_to_store)?;
-    let dest = target_dir.join(name);
+    // The upgraded binary replaces the running one in place (the running
+    // file's own name — `carpenter_nightly` upgrades `carpenter_nightly`); an
+    // explicit --bin-dir targets `<dir>/<binary_file_name>` instead.
+    let dest = match bin_dir {
+        Some(dir) => PathBuf::from(dir).join(store::binary_file_name(name)),
+        None => std::env::current_exe()
+            .map(|p| {
+                let s = p.display().to_string();
+                PathBuf::from(s.strip_suffix(" (deleted)").unwrap_or(&s))
+            })
+            .unwrap_or_else(|_| target_dir.join(store::binary_file_name(name))),
+    };
     let tmp = dest.with_extension("carpenter-tmp");
     std::fs::copy(&built, &tmp).map_err(store::io_to_store)?;
     std::fs::rename(&tmp, &dest).map_err(store::io_to_store)?;

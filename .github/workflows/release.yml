@@ -287,16 +287,21 @@ jobs:
       - name: assert shipped surface
         run: |
           set -eu
+          # stable ships as `carpenter`; the nightly script (PR lanes) ships `carpenter_nightly` (adr/027)
           BIN="$CARPENTER_INSTALL_DIR/carpenter"
+          test -x "$BIN" || BIN="$CARPENTER_INSTALL_DIR/carpenter_nightly"
           test -x "$BIN"
           "$BIN" --version
           "$BIN" howto > howto.md && test -s howto.md
           "$BIN" self register --app opencode | grep '"status":"ok"'
-          test -f "$HOME/.config/opencode/skills/carpenter/SKILL.md" \
-            || test -f "$HOME/Library/Application Support/opencode/skills/carpenter/SKILL.md"
+          { test -f "$HOME/.config/opencode/skills/carpenter/SKILL.md" \
+            || test -f "$HOME/Library/Application Support/opencode/skills/carpenter/SKILL.md" \
+            || test -f "$HOME/.config/opencode/skills/carpenter-nightly/SKILL.md" \
+            || test -f "$HOME/Library/Application Support/opencode/skills/carpenter-nightly/SKILL.md"; }
       - name: uninstall reverses the footprint
         run: |
           set -eu
           BIN="$CARPENTER_INSTALL_DIR/carpenter"
+          test -x "$BIN" || BIN="$CARPENTER_INSTALL_DIR/carpenter_nightly"
           "$BIN" self uninstall --bin-dir "$CARPENTER_INSTALL_DIR" | grep '"status":"ok"'
           test ! -e "$BIN"

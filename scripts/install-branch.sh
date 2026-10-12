@@ -25,7 +25,7 @@ die() { printf 'carpenter-branch: error: %s\n' "$1" >&2; exit 1; }
 
 REPO_ROOT=$(git rev-parse --show-toplevel)
 
-MODE="${1:-current}"
+MODE="${1:-}"
 UNINSTALL=no
 TARGET_BRANCH=""
 case "$MODE" in
@@ -39,8 +39,11 @@ esac
 TAG=$(printf '%s' "$TARGET_BRANCH" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]+/-/g; s/^-+//; s/-+$//')
 [ -n "$TAG" ] || die "branch '$TARGET_BRANCH' sanitizes to no install tag"
 
+# Command name (adr/027): only main keeps `carpenter`; branch installs use the
+# underscored form (`carpenter_ivan_topic`). The skill/data identity stays the
+# kebab tag — agent-app skill names forbid `_`.
 BIN_NAME="carpenter"
-[ "$TAG" = "main" ] || BIN_NAME="carpenter-$TAG"
+[ "$TAG" = "main" ] || BIN_NAME="carpenter_${TAG//[-]/_}"
 BIN_DIR="${HOME}/.local/bin"
 BIN="${BIN_DIR}/${BIN_NAME}"
 
@@ -56,8 +59,8 @@ if [ "$UNINSTALL" = yes ]; then
     [ -x "$BIN" ] || die "no tagged install at $BIN"
     say "uninstalling $BIN_NAME (binary, skill, data dir)"
     "$BIN" self uninstall || say "note: CLI uninstall reported an error; continuing"
-    data_dir="${XDG_CONFIG_HOME:-${HOME}/.config}/$BIN_NAME"
-    [ "$(uname -s)" = Darwin ] && data_dir="${HOME}/Library/Application Support/$BIN_NAME"
+    data_dir="${XDG_CONFIG_HOME:-${HOME}/.config}/$TAG"
+    [ "$(uname -s)" = Darwin ] && data_dir="${HOME}/Library/Application Support/$TAG"
     if [ -d "$data_dir" ]; then
         if [ -t 0 ]; then
             printf 'carpenter-branch: purge data dir %s? [y/N] ' "$data_dir"
@@ -103,8 +106,8 @@ say "building (cargo xtask build --release — gen-howto + gen-specs + the ship 
 mkdir -p "$BIN_DIR"
 install -m755 "$SRC_DIR/target/release/carpenter" "$BIN" || die "cannot write $BIN"
 
-data_dir="${XDG_CONFIG_HOME:-${HOME}/.config}/$BIN_NAME"
-[ "$(uname -s)" = Darwin ] && data_dir="${HOME}/Library/Application Support/$BIN_NAME"
+data_dir="${XDG_CONFIG_HOME:-${HOME}/.config}/$TAG"
+[ "$(uname -s)" = Darwin ] && data_dir="${HOME}/Library/Application Support/$TAG"
 
 apps=$(detect_apps)
 if [ -n "$apps" ]; then
@@ -122,5 +125,5 @@ fi
 
 say "installed $BIN"
 say "data dir: $data_dir (isolated from the stock install)"
-say "caveat: never run '$BIN_NAME upgrade' — it would pull stable bits under this branch tag"
-say "remove with: scripts/install-branch.sh --uninstall  (or: carpenter self remove $BIN_NAME)"
+say "caveat: never run '$BIN_NAME self upgrade' — it would pull stable bits under this branch tag"
+say "remove with: scripts/install-branch.sh --uninstall  (or: carpenter self remove $TAG)"

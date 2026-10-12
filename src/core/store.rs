@@ -77,11 +77,11 @@ pub fn config_dir() -> Option<PathBuf> {
 }
 
 /// The install identity: a kebab-case tag every surface of an install derives
-/// from — config dir, skill name/dir, opencode permission key, binary name.
-/// Resolution order: `CARPENTER_INSTALL_NAME` (tests pin it; a user can too),
-/// else the running binary's file stem (a branch install `carpenter-ivan-topic`
-/// tags itself automatically). The stock `carpenter` stem maps to itself, so
-/// plain installs resolve exactly the pre-adr/027 paths (adr/027).
+/// from — config dir, skill name/dir, opencode permission key. Resolution
+/// order: `CARPENTER_INSTALL_NAME` (tests pin it; a user can too), else the
+/// running binary's file stem (a branch install `carpenter_ivan_topic` tags
+/// itself automatically). The stock `carpenter` stem maps to itself, so plain
+/// installs resolve exactly the pre-adr/027 paths (adr/027).
 pub fn install_name() -> String {
     let override_name = std::env::var("CARPENTER_INSTALL_NAME")
         .ok()
@@ -97,12 +97,26 @@ pub fn install_name() -> String {
 /// Pure core of [`install_name`]: sanitize a binary stem into the install tag.
 /// The ` (deleted)` suffix (kernel artifact of upgrade's in-place replace —
 /// see `skill::strip_deleted`) is stripped; [`slugify`] does the kebab
-/// collapse; a missing or unsanitizable stem falls back to `carpenter`.
+/// collapse (`_` → `-`, so the underscored command names map onto the kebab
+/// identity that agent-app skill names require); a missing or unsanitizable
+/// stem falls back to `carpenter`.
 pub fn install_name_from(stem: Option<&str>) -> String {
     const DEFAULT: &str = "carpenter";
     let stem = stem.unwrap_or(DEFAULT);
     let stem = stem.strip_suffix(" (deleted)").unwrap_or(stem);
     slugify(stem).unwrap_or_else(|_| DEFAULT.to_string())
+}
+
+/// The binary file name for an install tag (adr/027): the stock `carpenter`
+/// keeps its name; every tagged install swaps `-` for `_` so the command reads
+/// `carpenter_nightly` / `carpenter_ivan_topic` (the skill/data identity stays
+/// kebab — agent-app skill names forbid `_`).
+pub fn binary_file_name(name: &str) -> String {
+    if name == "carpenter" {
+        String::from("carpenter")
+    } else {
+        name.replace('-', "_")
+    }
 }
 
 /// The user home directory (`~` — claude-code's `~/.claude` anchor).
@@ -373,6 +387,30 @@ fn install_name_strips_deleted_and_falls_back() {
     );
     // a stem with no alphanumerics cannot be a tag — stock fallback
     assert_eq!(install_name_from(Some("!!!")), "carpenter");
+}
+
+#[cfg(test)]
+#[test]
+fn underscored_command_names_map_onto_kebab_identity() {
+    assert_eq!(
+        install_name_from(Some("carpenter_nightly")),
+        "carpenter-nightly"
+    );
+    assert_eq!(
+        install_name_from(Some("carpenter_ivan_topic")),
+        "carpenter-ivan-topic"
+    );
+}
+
+#[cfg(test)]
+#[test]
+fn binary_file_name_swaps_dashes_for_underscores() {
+    assert_eq!(binary_file_name("carpenter"), "carpenter");
+    assert_eq!(binary_file_name("carpenter-nightly"), "carpenter_nightly");
+    assert_eq!(
+        binary_file_name("carpenter-ivan-topic"),
+        "carpenter_ivan_topic"
+    );
 }
 
 #[cfg(test)]

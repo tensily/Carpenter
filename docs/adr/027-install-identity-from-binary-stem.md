@@ -19,12 +19,18 @@ The running binary's file stem is the **install identity**, resolved by
 `core::store::install_name` (`CARPENTER_INSTALL_NAME` env override → sanitized
 exe stem → `carpenter`), and every install surface derives from it:
 
-| Surface | Stock (`carpenter`) | Branch (`ivan/foo` → `ivan-foo`) |
-|---|---|---|
-| binary | `~/.local/bin/carpenter` | `~/.local/bin/carpenter-ivan-foo` (script copies it) |
-| data dir | `~/.config/carpenter/` | `~/.config/carpenter-ivan-foo/` |
-| skill dir + frontmatter | `…/skills/carpenter/` | `…/skills/carpenter-ivan-foo/` |
-| opencode permission key | `skill.carpenter` | `skill.carpenter-ivan-foo` |
+| Surface | Stable (`main`) | Nightly | Branch (`ivan/foo`) |
+|---|---|---|---|
+| binary (command) | `carpenter` | `carpenter_nightly` | `carpenter_ivan_topic` |
+| identity (tag) | `carpenter` | `carpenter-nightly` | `carpenter-ivan-topic` |
+| data dir | `~/.config/carpenter/` | `~/.config/carpenter-nightly/` | `~/.config/carpenter-ivan-foo/` |
+| skill dir + frontmatter | `…/skills/carpenter/` | `…/skills/carpenter-nightly/` | `…/skills/carpenter-ivan-foo/` |
+| opencode permission key | `skill.carpenter` | `skill.carpenter-nightly` | `skill.carpenter-ivan-foo` |
+
+The command name swaps `-` for `_` (`store::binary_file_name`) so the three
+channel/command names are visually distinct at the shell; the identity stays
+kebab because agent-app skill names forbid `_` (`slugify` maps one onto the
+other bijectively for sanitized names).
 
 - **One rule, three surfaces** — no flags, no wrapper scripts, no env wiring at
   run time. The skill's embedded binary path (`current_exe` in `render`) points
@@ -35,7 +41,12 @@ exe stem → `carpenter`), and every install surface derives from it:
   no alphanumerics falls back to `carpenter`.
 - **`main` is the exception by construction, not by special case** — its stem
   *is* `carpenter`, so stock installs resolve byte-identical pre-adr/027
-  paths. `scripts/install-branch.sh` installs untagged only from `main`.
+  paths. `scripts/install-branch.sh` installs untagged only from `main`, and
+  `scripts/install.sh` ships `carpenter_nightly` for the nightly channel.
+- **Branch names are a contract** — the name becomes the tag, so a branch must
+  be lowercase kebab segments joined by `/`, ≤ 60 chars (else `slugify`
+  truncates/collides). The `.githooks/pre-commit` hook enforces it at commit
+  time; the convention is documented in `docs/README.md`.
 - **Name flows as a parameter** through `skill::register/deregister/render`,
   `App::skill_path`, and the `register`/`deregister`/`uninstall` commands
   (resolved at the `app.rs` dispatch); unit tests pin `"carpenter"` so they

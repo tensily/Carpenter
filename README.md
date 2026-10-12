@@ -62,6 +62,21 @@ also register manually:
 carpenter self register --app opencode  # or: claude-code
 ```
 
+### Command names per install
+
+Only the stable release installs as `carpenter`. Every other install carries
+its identity in the command name (adr/027) — `self` subcommands work on each:
+
+| install | command | skill / data dir |
+|---|---|---|
+| stable (main) | `carpenter` | `carpenter` |
+| nightly | `carpenter_nightly` | `carpenter-nightly` |
+| branch `ivan/topic` | `carpenter_ivan_topic` | `carpenter-ivan-topic` |
+
+Each install is fully isolated (own data dir, skill, and permission key); see
+`carpenter self list` and `carpenter self remove <tag>`. Dev-facing details:
+[docs/README.md](docs/README.md).
+
 ## Contributing
 
 Everything for working on carpenter — docs map, dev loop, release channels —
