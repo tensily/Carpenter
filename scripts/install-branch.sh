@@ -96,8 +96,8 @@ if [ "$TARGET_BRANCH" != "$CURRENT" ]; then
 fi
 
 say "branch $TARGET_BRANCH -> install tag $BIN_NAME"
-say "building (cargo xtask build — canonical: gen-howto + gen-specs + strict build)"
-(cd "$SRC_DIR" && cargo xtask build) || die "build failed"
+say "building (cargo xtask build --release — gen-howto + gen-specs + the ship build)"
+(cd "$SRC_DIR" && cargo xtask build --release) || die "build failed"
 [ -f "$SRC_DIR/target/release/carpenter" ] || die "build did not produce target/release/carpenter"
 
 mkdir -p "$BIN_DIR"
