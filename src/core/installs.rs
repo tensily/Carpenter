@@ -9,7 +9,7 @@ use std::path::{Path, PathBuf};
 use serde_json::{json, Value};
 
 use crate::core::error::CarpenterError;
-use crate::core::skill::{self, App};
+use crate::core::skill;
 use crate::core::store::{self, Paths};
 
 /// One carpenter install discovered on this machine.
@@ -25,12 +25,12 @@ pub struct DiscoveredInstall {
     pub data_dir: PathBuf,
 }
 
-/// Discover installs: the union of `carpenter*` binaries in `bin_dir`, skill
-/// dirs registered for either app, and data dirs under `xdg` (the config base
+/// Discover installs: the union of `carpenter*` binaries in `bin_dir`, skills
+/// registered with opencode, and data dirs under `xdg` (the config base
 /// — every install's [`store::config_dir`] is
 /// a `<tag>` leaf under it), keyed by tag and sorted by tag. `carpenter`
 /// itself is the stock install (adr/027).
-pub fn list(bin_dir: &Path, xdg: &Path, home: &Path) -> Vec<DiscoveredInstall> {
+pub fn list(bin_dir: &Path, xdg: &Path) -> Vec<DiscoveredInstall> {
     let mut tags: BTreeMap<String, DiscoveredInstall> = BTreeMap::new();
     let mut note = |tag: String, fill: &dyn Fn(&mut DiscoveredInstall)| {
         let entry = tags
@@ -63,22 +63,15 @@ pub fn list(bin_dir: &Path, xdg: &Path, home: &Path) -> Vec<DiscoveredInstall> {
             }
         }
     }
-    let skill_roots = [
-        (App::Opencode, xdg.join(App::Opencode.name())),
-        (App::ClaudeCode, home.join(".claude")),
-    ];
-    for (app, root) in skill_roots {
-        let Ok(entries) = std::fs::read_dir(root.join("skills")) else {
-            continue;
-        };
+    let skills_root = xdg.join(skill::APP).join("skills");
+    if let Ok(entries) = std::fs::read_dir(skills_root) {
         for e in entries.flatten() {
             let name = e.file_name().to_string_lossy().into_owned();
             if (name == skill::NAME || name.starts_with(&format!("{}-", skill::NAME)))
                 && skill::name_is_valid(&name)
                 && e.path().join("SKILL.md").is_file()
             {
-                let app = app.name().to_string();
-                note(name, &|d| d.skill_apps.push(app.clone()));
+                note(name, &|d| d.skill_apps.push(String::from(skill::APP)));
             }
         }
     }
@@ -108,7 +101,7 @@ pub fn list(bin_dir: &Path, xdg: &Path, home: &Path) -> Vec<DiscoveredInstall> {
 pub struct Removed {
     /// removed binary path (`None` if it was not present).
     pub bin: Option<String>,
-    /// skill removal outcome: per-app `{removed,app,path}` or
+    /// skill removal outcome: `{removed,app,path}` or
     /// `{removed:false,reason:"not_registered"}`.
     pub skill: Value,
     /// whether the config file was removed.
@@ -123,8 +116,8 @@ struct Legs {
     bin: PathBuf,
     /// whether the binary exists.
     bin_present: bool,
-    /// registered skill paths per app (existing ones only).
-    skills: Vec<(App, PathBuf)>,
+    /// whether the opencode skill is registered (skill file present).
+    skill_present: bool,
     /// the install's data dir (`<config base>/<tag>`), present or not.
     data_dir: PathBuf,
     /// the install's config file (`<data_dir>/config.json`) — the `--purge-config`
@@ -140,20 +133,12 @@ fn legs(paths: &Paths, bin_dir: Option<&str>, name: &str) -> Result<Legs, Carpen
     let target_dir = bin_dir.map(PathBuf::from).unwrap_or(cfg.bin_dir);
     let bin = find_binary(&target_dir, name)
         .unwrap_or_else(|| target_dir.join(store::binary_file_name(name)));
-    let (xdg, home) = (paths.xdg_root()?, paths.home_dir()?);
-    let skills = App::all()
-        .into_iter()
-        .map(|app| {
-            let p = app.skill_path(xdg, home, name);
-            (app, p)
-        })
-        .filter(|(_, p)| p.exists())
-        .collect();
+    let xdg = paths.xdg_root()?;
     let data_dir = xdg.join(name);
     Ok(Legs {
         bin_present: bin.exists(),
         bin,
-        skills,
+        skill_present: skill::skill_path(xdg, name).exists(),
         config: data_dir.join("config.json"),
         data_dir,
     })
@@ -177,16 +162,14 @@ pub fn removal_plan(
         l.bin.display(),
         if l.bin_present { "" } else { " (not present)" }
     ));
-    if l.skills.is_empty() {
-        plan.push_str("  skills: none registered\n");
+    if l.skill_present {
+        let xdg = paths.xdg_root()?;
+        plan.push_str(&format!(
+            "  skill: {} (opencode reads it from this machine-global path; --bin-dir scopes only the binary)\n",
+            skill::skill_path(xdg, name).display()
+        ));
     } else {
-        for (app, path) in &l.skills {
-            plan.push_str(&format!(
-                "  skill: {} ({} reads it from this machine-global path; --bin-dir scopes only the binary)\n",
-                path.display(),
-                app.name()
-            ));
-        }
+        plan.push_str("  skills: none registered\n");
     }
     if purge_config {
         plan.push_str(&format!(
@@ -211,7 +194,7 @@ pub fn removal_plan(
     Ok(plan)
 }
 
-/// Remove the install `name` (tag): skill of every registered app (best-effort),
+/// Remove the install `name` (tag): the opencode skill if registered,
 /// then the install's binary (the underscored command name or the kebab stem —
 /// whichever exists), then the removed tag's config file with `purge_config`
 /// ([adr/019] semantics — course data is never touched). `NotFound` only when
@@ -225,15 +208,22 @@ pub fn remove(
     name: &str,
 ) -> Result<Removed, CarpenterError> {
     let l = legs(paths, bin_dir, name)?;
-    if l.skills.is_empty() && !l.bin_present && !l.data_dir.exists() {
+    if !l.skill_present && !l.bin_present && !l.data_dir.exists() {
         return Err(CarpenterError::NotFound(format!(
             "carpenter install {name:?} not found (no registered skill, no binary at {}, and no data dir at {})",
             l.bin.display(),
             l.data_dir.display()
         )));
     }
-    let (xdg, home) = (paths.xdg_root()?, paths.home_dir()?);
-    let skill = remove_skills(&l.skills, xdg, home, name);
+    let xdg = paths.xdg_root()?;
+    let skill = if l.skill_present {
+        Value::Array(vec![match skill::deregister(xdg, name) {
+            Ok(d) => json!({"removed": true, "app": d.app, "path": d.path}),
+            Err(e) => json!({"removed": false, "reason": "not_registered", "error": e.to_string()}),
+        }])
+    } else {
+        json!({"removed": false, "reason": "not_registered"})
+    };
     let removed_bin = if l.bin_present {
         std::fs::remove_file(&l.bin).map_err(store::io_to_store)?;
         Some(l.bin.display().to_string())
@@ -277,20 +267,4 @@ fn find_binary(dir: &Path, name: &str) -> Option<PathBuf> {
         .collect();
     hits.sort();
     hits.into_iter().next()
-}
-
-/// Remove the discovered skills best-effort: a failing removal never fails the
-/// uninstall (mirrors `upgrade`'s `skill_outcome_for`).
-fn remove_skills(skills: &[(App, PathBuf)], root: &Path, home: &Path, name: &str) -> Value {
-    let outcomes: Vec<Value> = skills
-        .iter()
-        .map(|(app, _)| match skill::deregister(*app, root, home, name) {
-            Ok(d) => json!({"removed": true, "app": d.app, "path": d.path}),
-            Err(e) => json!({"removed": false, "reason": "not_registered", "error": e.to_string()}),
-        })
-        .collect();
-    if outcomes.is_empty() {
-        return json!({"removed": false, "reason": "not_registered"});
-    }
-    Value::Array(outcomes)
 }

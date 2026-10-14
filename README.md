@@ -13,7 +13,7 @@ Carpenter tracks your weak spots, andmake the the agent drills them with fresh
 exercises until they clear.
 
 > `v0.8.0` · Linux/macOS · works with
-> [opencode](https://opencode.ai) and claude code · BSD-3-Clause
+> [opencode](https://opencode.ai) · BSD-3-Clause
 
 ## Market fit
 
@@ -48,18 +48,18 @@ curl -LsSf https://github.com/tensily/Carpenter/releases/latest/download/install
 ```
 
 The installer prints a branded banner and an install plan — download source,
-checksum, binary destination, which agent apps it would register the skill
-into — and asks `proceed? [Y/n]` before downloading anything (Enter proceeds;
-piped/CI runs proceed without hanging). Decline with `n` and nothing is
-touched. The binary lands in `~/.local/bin` (add it to `PATH` if the installer
-says so). Update later with `carpenter self upgrade` (it also refreshes the skill).
+checksum, binary destination, whether it would register the skill with
+opencode — and asks `proceed? [Y/n]` before downloading anything (Enter
+proceeds; piped/CI runs proceed without hanging). Decline with `n` and nothing
+is touched. The binary lands in `~/.local/bin` (add it to `PATH` if the
+installer says so). Update later with `carpenter self upgrade` (it also
+refreshes the skill).
 
-If `opencode` or `claude` is on your machine, the installer asks whether to
-register the carpenter skill (each app, one by one; Enter registers); you can
-also register manually:
+If `opencode` is on your machine, the installer asks whether to register the
+carpenter skill (Enter registers); you can also register manually:
 
 ```sh
-carpenter self register --app opencode  # or: claude-code
+carpenter self register
 ```
 
 ### Command names per install

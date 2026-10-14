@@ -1324,16 +1324,14 @@ Remove the carpenter skill, the installed binary, and (with --purge-config) the 
 
 ### register
 
-Register the carpenter skill with an agent app (writes SKILL.md; opencode also gets a permission entry).
+Register the carpenter skill with opencode (writes SKILL.md + a permission entry).
 
-- `--app` — Agent app (opencode|claude-code).
 - `--print-skill` — Print the rendered SKILL.md to stdout instead of writing.
 
 ### deregister
 
-Deregister the carpenter skill (removes SKILL.md; opencode also loses its permission entry). Prints a plan and asks for confirmation; --yes skips.
+Deregister the carpenter skill (removes SKILL.md + the permission entry). Prints a plan and asks for confirmation; --yes skips.
 
-- `--app` — Agent app (opencode|claude-code).
 - `--yes` — Skip the confirmation prompt (non-interactive removal).
 
 ### list

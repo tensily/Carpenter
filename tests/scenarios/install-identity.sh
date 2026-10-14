@@ -15,7 +15,7 @@ assert_has fresh-target '"already_present":false' "$env"
 env=$(must_ok reinstall "$v" self install --bin-dir "$SHOME/bin")
 assert_has existing-target '"already_present":true' "$env"
 
-must_ok register "$v" self register --app opencode
+must_ok register "$v" self register
 
 list=$(must_ok list "$v" self list --bin-dir "$SHOME/bin")
 assert_has installed-binary '"tag":"carpenter"' "$list"

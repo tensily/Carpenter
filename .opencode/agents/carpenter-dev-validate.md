@@ -94,8 +94,8 @@ report (see Phase D).
 
 ## Machine-global surfaces & install identity (the `self` group)
 
-`self …` is **not** scoped by `--root`. Skills live in the real agent-app dirs
-(`~/.config/opencode/skills/<tag>/SKILL.md`, `~/.claude/skills/<tag>/`), and
+`self …` is **not** scoped by `--root`. Skills live in the real agent-app dir
+(`~/.config/opencode/skills/<tag>/SKILL.md`), and
 each install's config/data in the real config base (`~/.config/<tag>/`). Only
 `--bin-dir` scopes the binary leg. Treat every `self` invocation as a
 machine-global operation — read the hygiene section below before any
@@ -133,7 +133,7 @@ empirically each run (guards can regress; that is the bug class):
   of every self-group pass; re-run both at the end and compare. Any drift you
   did not intend is a self-inflicted incident: restore it, then disclose it in
   the report.
-- **Skill restore**: `./target/debug/carpenter self register --app opencode`
+- **Skill restore**: `./target/debug/carpenter self register`
   recreates SKILL.md + the permission key + the registration. Run it
   immediately after any probe that removed a skill — before anything else.
 - **`--purge-config` purges `<config base>/<tag>/config.json`.** Never aim it
@@ -339,7 +339,7 @@ Install identity and coexistence are always in scope, regardless of focus:
 ```
 cp target/debug/carpenter .sandbox/bin/carpenter_validate
 .sandbox/bin/carpenter_validate self install --bin-dir .sandbox/bin
-.sandbox/bin/carpenter_validate self register --app opencode
+.sandbox/bin/carpenter_validate self register
 ./target/debug/carpenter self list --bin-dir .sandbox/bin    # union, keyed by tag
 .sandbox/bin/carpenter_validate self remove carpenter_validate --bin-dir .sandbox/bin --yes
 ./target/debug/carpenter self list --bin-dir .sandbox/bin    # stock install untouched
@@ -382,9 +382,9 @@ Never let a timeout kill the evidence. Diagnose, then prescribe the fix:
      coverage belongs at the CLI/subprocess level, where
      `Command::output()` closes stdin (deterministic EOF).
    - **PTY tests (`script(1)`) leaking real apps** — installer-style detection
-     (`command -v`) sees the dev machine's real `opencode`/`claude` through the
-     unsandboxed `PATH` and asks N+1 prompts the scripted Enters never answer
-     (CI stays green; local hangs). Stub **every** detectable app in the
+     (`command -v`) sees the dev machine's real `opencode` through the
+     unsandboxed `PATH` and asks an extra prompt the scripted Enters never
+     answer (CI stays green; local hangs). Stub **every** detectable app in the
      test's stub dir.
 
 ## Scenario scripts — the reproducibility mandate
@@ -504,7 +504,7 @@ you restored). After sign-off, add the **scenario scripts** authored under
   `lesson execute` / `quiz run` (a learner studies one lesson at a time).
 - Never proceed past the report without explicit human sign-off.
 - Never hand-edit `src/howto.gen.md` or `docs/specs/*` — they regenerate via xtask.
-- Never leave a removed skill unrestored — `self register --app opencode`
+- Never leave a removed skill unrestored — `self register`
   immediately after every skill-removing probe.
 - Never aim `--purge-config` at a real data-dir tag.
 - Never author a scenario script (or manual repro) that touches real `HOME` —

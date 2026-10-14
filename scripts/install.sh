@@ -87,23 +87,17 @@ esac
 
 tarball="carpenter-${target}.tar.gz"
 
-# Detect agent apps up front so the plan can show exactly what registration
-# would touch; the register actions themselves run after the binary lands.
+# Detect opencode up front so the plan can show exactly what registration
+# would touch; the register action itself runs after the binary lands.
 apps=""
-for app in opencode claude-code; do
-    bin=$app
-    [ "$app" = "claude-code" ] && bin=claude
-    if command -v "$bin" >/dev/null 2>&1; then
-        apps="${apps}${app} "
-    fi
-done
+if command -v opencode >/dev/null 2>&1; then
+    apps="opencode "
+fi
 
 skill_path() { # $1 = app → the SKILL.md the installer would write
     case "$1" in
         opencode)
             printf '%s/opencode/skills/%s/SKILL.md' "${XDG_CONFIG_HOME:-${HOME}/.config}" "$SKILL_TAG" ;;
-        claude-code)
-            printf '%s/.claude/skills/%s/SKILL.md' "${HOME}" "$SKILL_TAG" ;;
     esac
 }
 
@@ -145,12 +139,10 @@ if [ -n "$apps" ]; then
     for app in $apps; do
         printf '  %sregister%s  %s%s%s -> %s%s%s\n' \
             "$MUTED" "$RESET" "$CREAM" "$app" "$RESET" "$CREAM" "$(skill_path "$app")" "$RESET"
-        if [ "$app" = "opencode" ]; then
-            printf '             %s+ permission "skill.%s": allow in opencode.json%s\n' "$CREAM" "$SKILL_TAG" "$RESET"
-        fi
+        printf '             %s+ permission "skill.%s": allow in opencode.json%s\n' "$CREAM" "$SKILL_TAG" "$RESET"
     done
 else
-    printf '  %sregister%s  %s(no agent app detected; later: carpenter self register --app opencode|claude-code)%s\n' \
+    printf '  %sregister%s  %s(no agent app detected; later: carpenter self register)%s\n' \
         "$MUTED" "$RESET" "$CREAM" "$RESET"
 fi
 if on_path; then
@@ -218,12 +210,12 @@ ask_register() { # $1 = app label → Y/n from the user (Enter registers)
     esac
 }
 
-do_register() { # $1 = --app value, $2 = label for notes
-    if "${INSTALL_DIR}/${BIN_NAME}" self register --app "$1" >/dev/null 2>&1; then
-        say "registered in $2 (skill)"
+do_register() { # $1 = label for notes
+    if "${INSTALL_DIR}/${BIN_NAME}" self register >/dev/null 2>&1; then
+        say "registered in $1 (skill)"
     else
-        printf 'carpenter: note: register failed; run manually: %s self register --app %s\n' \
-            "${INSTALL_DIR}/${BIN_NAME}" "$1" >&2
+        printf 'carpenter: note: register failed; run manually: %s self register\n' \
+            "${INSTALL_DIR}/${BIN_NAME}" >&2
     fi
 }
 
@@ -232,17 +224,17 @@ if [ -n "$apps" ]; then
     for app in $apps; do
         if [ "$interactive" = "yes" ]; then
             if ask_register "$app"; then
-                do_register "$app" "$app"
+                do_register "$app"
             else
-                say "skipped $app (register later: carpenter self register --app $app)"
+                say "skipped $app (register later: carpenter self register)"
             fi
         else
             say "$app detected — registering carpenter skill (non-interactive)"
-            do_register "$app" "$app"
+            do_register "$app"
         fi
     done
 else
-    printf 'carpenter: note: no agent app detected; register manually with: carpenter register --app opencode|claude-code\n' >&2
+    printf 'carpenter: note: no agent app detected; register manually with: carpenter self register\n' >&2
 fi
 
 # --- summary: what just landed on this machine -------------------------------

@@ -6,16 +6,13 @@ use std::path::{Path, PathBuf};
 
 use crate::core::error::CarpenterError;
 
-/// Resolved runtime paths: the workspace `root`, the app `config_dir`, and the
-/// user `home` dir.
+/// Resolved runtime paths: the workspace `root` and the app `config_dir`.
 #[derive(Debug, Clone)]
 pub struct Paths {
     /// Workspace root (from `--root`, else cwd).
     pub root: PathBuf,
     /// App config directory (`~/.config/carpenter`).
     pub config_dir: Option<PathBuf>,
-    /// User home dir (`~` — claude-code's `~/.claude` anchor).
-    pub home: Option<PathBuf>,
 }
 
 impl Paths {
@@ -45,14 +42,6 @@ impl Paths {
         self.require_config_dir()?
             .parent()
             .ok_or_else(|| CarpenterError::StoreError("config dir has no parent".into()))
-    }
-
-    /// The user home dir, or `StoreError` if none could be resolved (claude-code
-    /// skill integration has no anchor without it).
-    pub fn home_dir(&self) -> Result<&Path, CarpenterError> {
-        self.home
-            .as_deref()
-            .ok_or_else(|| CarpenterError::StoreError("no home directory resolved".into()))
     }
 
     /// A course directory.
@@ -117,11 +106,6 @@ pub fn binary_file_name(name: &str) -> String {
     } else {
         name.replace('-', "_")
     }
-}
-
-/// The user home directory (`~` — claude-code's `~/.claude` anchor).
-pub fn home_dir() -> Option<PathBuf> {
-    dirs::home_dir()
 }
 
 /// Derive a kebab-case slug from a title.

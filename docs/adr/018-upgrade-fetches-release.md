@@ -64,12 +64,11 @@ verification**, not a clone.
 
 ## Update (2026-08-27)
 
-The skill rule changed with multi-app support (`opencode` + `claude-code`):
-**both** modes now refresh only **registered** apps (skill file present) and
-never register a new one — release mode no longer force-registers opencode.
-Parity is preserved with the updated installer, which registers only what the
-user confirmed (non-interactive lanes auto-register detected apps).
-`skill` is an array of per-app outcomes when any app is registered. See
+The skill rule: **both** modes now refresh only a **registered** skill (skill
+file present) and never register a new one — release mode no longer
+force-registers opencode. Parity is preserved with the installer, which
+registers only what the user confirmed (non-interactive lanes auto-register a
+detected opencode). `skill` is the refresh outcome when registered. See
 [adr/006](006-skill-integration.md) update.
 
 ## Update (2026-08-27, channels)
