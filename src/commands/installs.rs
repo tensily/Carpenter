@@ -11,13 +11,9 @@ use crate::core::installs;
 use crate::core::store::{self, Paths};
 use crate::models::Data;
 
-/// `installs list [--bin-dir <p>]`.
+/// `self list [--bin-dir <p>]`.
 pub fn list(paths: &Paths, bin_dir: Option<&str>) -> Result<Data, CarpenterError> {
-    let cfg = paths
-        .config_file()
-        .map(|p| crate::core::config::load_from(&p))
-        .unwrap_or_default();
-    let target_dir = bin_dir.map(std::path::PathBuf::from).unwrap_or(cfg.bin_dir);
+    let target_dir = paths.resolve_bin_dir(bin_dir);
     let xdg = paths.xdg_root()?;
     let found = installs::list(&target_dir, xdg);
     Ok(Data::InstallsList {
@@ -33,7 +29,7 @@ pub fn list(paths: &Paths, bin_dir: Option<&str>) -> Result<Data, CarpenterError
     })
 }
 
-/// `installs remove <tag> [--bin-dir <p>] [--purge-config] [--yes]`. The `tag`
+/// `self remove <tag> [--bin-dir <p>] [--purge-config] [--yes]`. The `tag`
 /// must be kebab-case (`^[a-z0-9]+(-[a-z0-9]+)*$`, max 60) — a `carpenter` or
 /// `carpenter-<branch>` stem (adr/027). Prints the removal plan and asks for
 /// confirmation unless `--yes` (adr/019 revision); a declined or absent

@@ -1,20 +1,13 @@
 //! `install` — place the running carpenter binary into a bin dir (default from
 //! config, else `~/.local/bin`) so it is callable globally.
 
-use std::path::PathBuf;
-
-use crate::core::config;
 use crate::core::error::CarpenterError;
 use crate::core::store::{self, Paths};
 use crate::models::Data;
 
 /// `install [--bin-dir <p>]`.
 pub fn install(paths: &Paths, bin_dir: Option<&str>) -> Result<Data, CarpenterError> {
-    let cfg = paths
-        .config_file()
-        .map(|p| config::load_from(&p))
-        .unwrap_or_default();
-    let target_dir = bin_dir.map(PathBuf::from).unwrap_or(cfg.bin_dir);
+    let target_dir = paths.resolve_bin_dir(bin_dir);
     let src = std::env::current_exe()
         .map_err(|e| CarpenterError::StoreError(format!("current_exe failed: {e}")))?;
     std::fs::create_dir_all(&target_dir).map_err(store::io_to_store)?;

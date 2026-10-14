@@ -1,5 +1,5 @@
 //! Output types + examples for `installs list`/`installs remove`
-//! (docs/specs/24-installs.md).
+//! (docs/specs/24-self.md).
 
 use serde::Serialize;
 

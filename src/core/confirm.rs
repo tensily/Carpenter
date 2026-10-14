@@ -24,10 +24,10 @@ pub fn confirm(plan: &str) -> Result<(), CarpenterError> {
     let mut err = std::io::stderr().lock();
     let _ = write!(err, "{plan}{PROMPT}");
     let _ = err.flush();
-    match confirm_on(&mut std::io::stdin().lock()) {
-        Ok(true) => Ok(()),
-        _ => Err(declined()),
+    if !confirm_on(&mut std::io::stdin().lock()) {
+        return Err(declined());
     }
+    Ok(())
 }
 
 fn declined() -> CarpenterError {
@@ -39,12 +39,13 @@ fn declined() -> CarpenterError {
 
 /// Injectable decision core of [`confirm`]: read one line from `r`; an
 /// explicit `y`/`Y` confirms, anything else — Enter, `n`, an unreadable
-/// stream, EOF — declines. Public for tests.
-pub fn confirm_on(r: &mut impl BufRead) -> Result<bool, CarpenterError> {
+/// stream, EOF — declines. Infallible by construction (an unreadable stream
+/// reads as EOF). Public for tests.
+pub fn confirm_on(r: &mut impl BufRead) -> bool {
     let mut line = String::new();
     match r.read_line(&mut line) {
-        Ok(n) if n > 0 => Ok(matches!(line.trim(), "y" | "Y")),
-        _ => Ok(false),
+        Ok(n) if n > 0 => matches!(line.trim(), "y" | "Y"),
+        _ => false,
     }
 }
 
@@ -55,14 +56,11 @@ mod tests {
 
     #[test]
     fn explicit_yes_confirms_everything_else_declines() {
-        assert!(confirm_on(&mut Cursor::new("y\n")).unwrap());
-        assert!(confirm_on(&mut Cursor::new("Y\n")).unwrap());
-        assert!(!confirm_on(&mut Cursor::new("n\n")).unwrap(), "explicit no");
-        assert!(!confirm_on(&mut Cursor::new("\n")).unwrap(), "Enter = N");
-        assert!(
-            !confirm_on(&mut Cursor::new("yes\n")).unwrap(),
-            "must be bare y/Y"
-        );
-        assert!(!confirm_on(&mut Cursor::new("")).unwrap(), "EOF declines");
+        assert!(confirm_on(&mut Cursor::new("y\n")));
+        assert!(confirm_on(&mut Cursor::new("Y\n")));
+        assert!(!confirm_on(&mut Cursor::new("n\n")), "explicit no");
+        assert!(!confirm_on(&mut Cursor::new("\n")), "Enter = N");
+        assert!(!confirm_on(&mut Cursor::new("yes\n")), "must be bare y/Y");
+        assert!(!confirm_on(&mut Cursor::new("")), "EOF declines");
     }
 }

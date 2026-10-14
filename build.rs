@@ -194,7 +194,7 @@ fn parse_invocation(line: &str, known: &HashSet<String>) -> Option<String> {
         if t0 == "self" {
             let matches: Vec<&String> = known
                 .iter()
-                .filter(|k| k.ends_with(&format!("::{t1}")))
+                .filter(|k| k.rsplit_once("::").is_some_and(|(_, f)| f == *t1))
                 .collect();
             if matches.len() == 1 {
                 return Some((*matches[0]).clone());

@@ -43,13 +43,15 @@ pub fn list(bin_dir: &Path, xdg: &Path) -> Vec<DiscoveredInstall> {
             });
         fill(entry);
     };
+    // the "what names count as an install" rule, hoisted once: the tag is the
+    // stock name or a `<NAME>-…` kebab (binaries additionally accept the
+    // underscored command spelling, adr/027)
+    let kebab = format!("{}-", skill::NAME);
+    let underscored = format!("{}_", skill::NAME);
+    let tag_like = |s: &str| s == skill::NAME || s.starts_with(&kebab);
     let bin_tag = |p: &Path| -> Option<String> {
         let stem = p.file_stem()?.to_string_lossy().into_owned();
-        // binaries carry the tag as kebab (`carpenter-nightly`) or as the
-        // underscored command name (`carpenter_nightly`, adr/027)
-        let is_install = stem == skill::NAME
-            || stem.starts_with(&format!("{}-", skill::NAME))
-            || stem.starts_with(&format!("{}_", skill::NAME));
+        let is_install = tag_like(&stem) || stem.starts_with(&underscored);
         is_install.then(|| store::install_name_from(Some(&stem)))
     };
     if let Ok(entries) = std::fs::read_dir(bin_dir) {
@@ -67,9 +69,7 @@ pub fn list(bin_dir: &Path, xdg: &Path) -> Vec<DiscoveredInstall> {
     if let Ok(entries) = std::fs::read_dir(skills_root) {
         for e in entries.flatten() {
             let name = e.file_name().to_string_lossy().into_owned();
-            if (name == skill::NAME || name.starts_with(&format!("{}-", skill::NAME)))
-                && skill::name_is_valid(&name)
-                && e.path().join("SKILL.md").is_file()
+            if tag_like(&name) && skill::name_is_valid(&name) && e.path().join("SKILL.md").is_file()
             {
                 note(name, &|d| d.skill_apps.push(String::from(skill::APP)));
             }
@@ -78,9 +78,7 @@ pub fn list(bin_dir: &Path, xdg: &Path) -> Vec<DiscoveredInstall> {
     if let Ok(entries) = std::fs::read_dir(xdg) {
         for e in entries.flatten() {
             let name = e.file_name().to_string_lossy().into_owned();
-            if (name == skill::NAME || name.starts_with(&format!("{}-", skill::NAME)))
-                && skill::name_is_valid(&name)
-            {
+            if tag_like(&name) && skill::name_is_valid(&name) {
                 let dir = e.path();
                 note(name, &|d| d.data_dir = dir.clone());
             }
@@ -126,11 +124,7 @@ struct Legs {
 }
 
 fn legs(paths: &Paths, bin_dir: Option<&str>, name: &str) -> Result<Legs, CarpenterError> {
-    let cfg = paths
-        .config_file()
-        .map(|p| crate::core::config::load_from(&p))
-        .unwrap_or_default();
-    let target_dir = bin_dir.map(PathBuf::from).unwrap_or(cfg.bin_dir);
+    let target_dir = paths.resolve_bin_dir(bin_dir);
     let bin = find_binary(&target_dir, name)
         .unwrap_or_else(|| target_dir.join(store::binary_file_name(name)));
     let xdg = paths.xdg_root()?;

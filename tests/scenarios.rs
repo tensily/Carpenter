@@ -64,38 +64,49 @@ fn run_script(script: &Path, home: &Path) -> Outcome {
         .stderr(Stdio::piped())
         .spawn()
         .expect("spawn scenario script");
-    let deadline = Instant::now() + SCRIPT_TIMEOUT;
-    loop {
-        match child.try_wait().expect("poll scenario script") {
-            Some(status) => {
-                let out = child.wait_with_output().expect("reap scenario script");
-                return Outcome {
-                    success: status.success(),
-                    code: status.code(),
-                    transcript: format!(
-                        "{}{}",
-                        String::from_utf8_lossy(&out.stdout),
-                        String::from_utf8_lossy(&out.stderr)
-                    ),
-                    timed_out: false,
-                };
+    // Drain both pipes on threads — a script whose output exceeds the OS pipe
+    // buffer would otherwise block on write, `try_wait` would never flip, and
+    // the run would burn the whole timeout as a false failure.
+    fn drain<I: std::io::Read + Send + 'static>(io: Option<I>) -> std::thread::JoinHandle<String> {
+        std::thread::spawn(move || {
+            let mut buf = String::new();
+            if let Some(mut io) = io {
+                let _ = io.read_to_string(&mut buf);
             }
+            buf
+        })
+    }
+    let stdout = drain(child.stdout.take());
+    let stderr = drain(child.stderr.take());
+    let deadline = Instant::now() + SCRIPT_TIMEOUT;
+    let (status, timed_out) = loop {
+        match child.try_wait().expect("poll scenario script") {
+            Some(status) => break (Some(status), false),
             None if Instant::now() >= deadline => {
                 let _ = child.kill();
-                let out = child.wait_with_output().expect("reap killed scenario");
-                return Outcome {
-                    success: false,
-                    code: None,
-                    transcript: format!(
-                        "{}{}",
-                        String::from_utf8_lossy(&out.stdout),
-                        String::from_utf8_lossy(&out.stderr)
-                    ),
-                    timed_out: true,
-                };
+                break (Some(child.wait().expect("reap killed scenario")), true);
             }
             None => std::thread::sleep(Duration::from_millis(50)),
         }
+    };
+    let transcript = format!(
+        "{}{}",
+        stdout.join().unwrap_or_default(),
+        stderr.join().unwrap_or_default()
+    );
+    match (status, timed_out) {
+        (Some(status), false) => Outcome {
+            success: status.success(),
+            code: status.code(),
+            transcript,
+            timed_out: false,
+        },
+        _ => Outcome {
+            success: false,
+            code: None,
+            transcript,
+            timed_out: true,
+        },
     }
 }
 

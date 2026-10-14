@@ -44,6 +44,18 @@ impl Paths {
             .ok_or_else(|| CarpenterError::StoreError("config dir has no parent".into()))
     }
 
+    /// The bin dir a meta-command targets: the `--bin-dir` flag, else the
+    /// config `bin_dir`, else the built-in default. The one home of the
+    /// flag-overrides-config policy — shared by `self install`, `self
+    /// upgrade`, `self list`, and removal discovery (`core::installs`).
+    pub fn resolve_bin_dir(&self, bin_dir: Option<&str>) -> PathBuf {
+        let cfg = self
+            .config_file()
+            .map(|p| crate::core::config::load_from(&p))
+            .unwrap_or_default();
+        bin_dir.map(PathBuf::from).unwrap_or(cfg.bin_dir)
+    }
+
     /// A course directory.
     pub fn course(&self, slug: &str) -> PathBuf {
         self.courses().join(slug)
@@ -85,27 +97,31 @@ pub fn install_name() -> String {
 
 /// Pure core of [`install_name`]: sanitize a binary stem into the install tag.
 /// The ` (deleted)` suffix (kernel artifact of upgrade's in-place replace —
-/// see `skill::strip_deleted`) is stripped; [`slugify`] does the kebab
+/// see [`strip_deleted`]) is stripped; [`slugify`] does the kebab
 /// collapse (`_` → `-`, so the underscored command names map onto the kebab
 /// identity that agent-app skill names require); a missing or unsanitizable
 /// stem falls back to `carpenter`.
 pub fn install_name_from(stem: Option<&str>) -> String {
     const DEFAULT: &str = "carpenter";
     let stem = stem.unwrap_or(DEFAULT);
-    let stem = stem.strip_suffix(" (deleted)").unwrap_or(stem);
-    slugify(stem).unwrap_or_else(|_| DEFAULT.to_string())
+    slugify(strip_deleted(stem)).unwrap_or_else(|_| DEFAULT.to_string())
 }
 
-/// The binary file name for an install tag (adr/027): the stock `carpenter`
-/// keeps its name; every tagged install swaps `-` for `_` so the command reads
-/// `carpenter_nightly` / `carpenter_ivan_topic` (the skill/data identity stays
-/// kebab — agent-app skill names forbid `_`).
+/// Strip Linux's `" (deleted)"` suffix. The kernel appends it to
+/// `/proc/self/exe` when the running binary's file has been replaced in place
+/// — which happens during `upgrade` (it copies the new binary over its own
+/// path). Without this the derived tag reads `…carpenter (deleted)`.
+pub fn strip_deleted(s: &str) -> &str {
+    s.strip_suffix(" (deleted)").unwrap_or(s)
+}
+
+/// The binary file name for an install tag (adr/027): every tagged install
+/// swaps `-` for `_` so the command reads `carpenter_nightly` /
+/// `carpenter_ivan_topic` (the skill/data identity stays kebab — agent-app
+/// skill names forbid `_`). The stock `carpenter` has no `-`, so it maps to
+/// itself.
 pub fn binary_file_name(name: &str) -> String {
-    if name == "carpenter" {
-        String::from("carpenter")
-    } else {
-        name.replace('-', "_")
-    }
+    name.replace('-', "_")
 }
 
 /// Derive a kebab-case slug from a title.
@@ -294,6 +310,42 @@ fn slugify_truncates_at_60() {
 #[test]
 fn slugify_non_ascii_collapses_to_dash() {
     assert_slug("Café ☕", "caf");
+}
+
+#[cfg(test)]
+#[test]
+fn strip_deleted_handles_upgrade_artifact() {
+    assert_eq!(
+        strip_deleted("/home/u/.local/bin/carpenter"),
+        "/home/u/.local/bin/carpenter"
+    );
+    assert_eq!(
+        strip_deleted("/home/u/.local/bin/carpenter (deleted)"),
+        "/home/u/.local/bin/carpenter"
+    );
+    // only a true suffix match is stripped
+    assert_eq!(strip_deleted("/x (deleted) y"), "/x (deleted) y");
+    assert_eq!(strip_deleted(""), "");
+}
+
+#[cfg(test)]
+#[test]
+fn resolve_bin_dir_flag_overrides_config() {
+    let n = std::process::id();
+    let root = std::env::temp_dir().join(format!("carpenter-resolve-{n}"));
+    let _ = std::fs::remove_dir_all(&root);
+    let paths = Paths {
+        root: root.clone(),
+        config_dir: Some(root.join("xdg").join("carpenter")),
+    };
+    // no config file → the built-in default
+    assert!(paths.resolve_bin_dir(None).ends_with(".local/bin"));
+    // the flag wins over anything
+    assert_eq!(
+        paths.resolve_bin_dir(Some("/tmp/elsewhere")),
+        PathBuf::from("/tmp/elsewhere")
+    );
+    let _ = std::fs::remove_dir_all(&root);
 }
 
 #[cfg(test)]

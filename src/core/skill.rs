@@ -46,8 +46,14 @@ const PEDAGOGY: &str = "One concept per lesson. Practice is attached to its teac
 /// wait for confirmation — generating lessons before approval is a process bug.
 const WALKTHROUGH: &str = "Before generating any lesson, run this Q&A with the user and **confirm the proposed outline** (lesson list + per-lesson practice/quizzes + conventions). Do not call `lesson create` until the user explicitly approves.\n\n1. **Audience & scope** — level (beginner/intermediate/advanced), prerequisites, total lesson count, and grouping into parts/batches. Carry the learner-intake answers in — do not re-interrogate.\n2. **Outline** — for each lesson: title, the concepts it teaches, the practice functions (name + signature + return type), and the end-of-lesson quizzes. Propose the full list and let the user edit it.\n3. **Grading conventions** — agree these once and apply everywhere:\n   - Compare is **exact** by default (`compare:\"exact\"`); use `sorted`/`set` only when order or multiplicity is irrelevant.\n   - Cases return **plain Python** (`float(...)`, `.tolist()`, `int`, `bool`, `str`, nested `list`) — never raw NumPy arrays.\n   - **Float outputs round to 8 decimals** (`np.round(x, 8).tolist()`) so LAPACK noise (`inv`/`eig`/`svd`/`lstsq`) passes exact equality. Prefer integer-valued cases (bit-exact without rounding).\n   - Design cases to be **deterministic**: avoid sign/scale ambiguity (eigenvectors, SVD `U`/`V` columns) — grade on eigenvalues, singular values, ranks, traces, determinants, reconstructions, or `argmax` instead.\n4. **Stack & IDs** — language, the venv deps (`venv create` + `venv add`), and the slug/ID conventions. Author specs as **YAML** (block scalars keep multi-line markdown/code readable); `carpenter lesson new` emits a YAML template. Quote any value containing `:` (signatures always do).\n5. **Verification contract** — per lesson: (a) lock the answer key with `lesson verify` — each practice/quiz may carry a `solution` (author reference Python) that carpenter runs against its own cases in the course venv (`lesson verify --spec -` before create, `lesson verify <id>` to re-verify); (b) `lesson execute --allow-errors` reports `errored:0` (teaching cells run clean; empty stubs define functions and don't raise at define time); (c) `quiz run` on the fresh notebook reports all quizzes `pass_or_fail:false`. **Never hand-edit a rendered `lesson.ipynb`** — regenerate only via `lesson create` / `lesson update` / `lesson sync`.\n6. **Domain** — pick a concrete running example domain.\n\nPresent the agreed outline back as a checklist and proceed only after the user confirms.";
 
-/// Validate a skill name against opencode's `^[a-z0-9]+(-[a-z0-9]+)*$`.
+/// Validate a skill name against opencode's `^[a-z0-9]+(-[a-z0-9]+)*$`, with
+/// the same ≤60-char cap [`store::slugify`] enforces — `self remove` validates
+/// through `slugify`, so discovery and `register` must agree or an install
+/// becomes visible but unremovable.
 pub fn name_is_valid(s: &str) -> bool {
+    if s.len() > 60 {
+        return false;
+    }
     let mut prev_dash = false;
     let mut alnum = 0;
     for ch in s.chars() {
@@ -82,15 +88,6 @@ fn manual_body() -> &'static str {
     }
 }
 
-/// Strip Linux's `" (deleted)"` suffix. The kernel appends it to `/proc/self/exe`
-/// (read by [`std::env::current_exe`]) when the running binary's file has been
-/// replaced in place — which happens during `upgrade` (it copies the new binary
-/// over its own path, then refreshes the skill). Without this the embedded path
-/// reads `…/carpenter (deleted)`.
-fn strip_deleted(s: &str) -> &str {
-    s.strip_suffix(" (deleted)").unwrap_or(s)
-}
-
 /// Render the full `SKILL.md` (frontmatter + body). Embeds the skill `name`
 /// (the install tag), the running version, binary path, and the full generated
 /// howto manual. Deterministic within a process (same `current_exe`).
@@ -98,7 +95,7 @@ pub fn render(name: &str) -> Result<String, CarpenterError> {
     let exe = std::env::current_exe()
         .map_err(|e| CarpenterError::StoreError(format!("current_exe failed: {e}")))?;
     let exe = exe.display().to_string();
-    let bin = strip_deleted(&exe);
+    let bin = store::strip_deleted(&exe);
     let version = env!("CARGO_PKG_VERSION");
     let frontmatter = format!(
         "---\nname: {name}\ndescription: \"{}\"\n---\n\n",
@@ -267,21 +264,6 @@ mod tests {
         let a = render(NAME).expect("render");
         let b = render(NAME).expect("render");
         assert_eq!(a, b, "re-render must be byte-equal (adr/009)");
-    }
-
-    #[test]
-    fn strip_deleted_handles_upgrade_artifact() {
-        assert_eq!(
-            strip_deleted("/home/u/.local/bin/carpenter"),
-            "/home/u/.local/bin/carpenter"
-        );
-        assert_eq!(
-            strip_deleted("/home/u/.local/bin/carpenter (deleted)"),
-            "/home/u/.local/bin/carpenter"
-        );
-        // only a true suffix match is stripped
-        assert_eq!(strip_deleted("/x (deleted) y"), "/x (deleted) y");
-        assert_eq!(strip_deleted(""), "");
     }
 
     #[test]

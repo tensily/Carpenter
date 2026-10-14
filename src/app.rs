@@ -1087,6 +1087,9 @@ fn self_cmd(paths: &Paths, sub: &ArgMatches) -> Result<Data, core::error::Carpen
     fn bin_dir(m: &ArgMatches) -> Option<&str> {
         m.get_one::<String>("bin-dir").map(|s| s.as_str())
     }
+    // one identity resolution per dispatch — every install-lifecycle fn takes
+    // the same tag (adr/027)
+    let name = core::store::install_name();
     match sub.subcommand() {
         Some(("install", m)) => commands::install::install(paths, bin_dir(m)),
         Some(("upgrade", m)) => commands::upgrade::upgrade(
@@ -1097,22 +1100,20 @@ fn self_cmd(paths: &Paths, sub: &ArgMatches) -> Result<Data, core::error::Carpen
             m.get_one::<String>("channel")
                 .map(|s| s.as_str())
                 .unwrap_or("stable"),
-            &core::store::install_name(),
+            &name,
         ),
         Some(("uninstall", m)) => commands::uninstall::uninstall(
             paths,
             bin_dir(m),
             m.get_flag("purge-config"),
             m.get_flag("yes"),
-            &core::store::install_name(),
+            &name,
         ),
-        Some(("register", m)) => commands::register::register(
-            paths,
-            m.get_flag("print-skill"),
-            &core::store::install_name(),
-        ),
+        Some(("register", m)) => {
+            commands::register::register(paths, m.get_flag("print-skill"), &name)
+        }
         Some(("deregister", m)) => {
-            commands::deregister::deregister(paths, m.get_flag("yes"), &core::store::install_name())
+            commands::deregister::deregister(paths, m.get_flag("yes"), &name)
         }
         Some(("list", m)) => commands::installs::list(paths, bin_dir(m)),
         Some(("remove", m)) => commands::installs::remove(

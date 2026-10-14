@@ -24,7 +24,7 @@ use crate::models::Data;
 
 /// The single-sourced "not registered" warning (spec 18).
 const NOT_REGISTERED_WARNING: &str =
-    "CLI not registered in any agent app — nothing to upgrade. Run `carpenter register`.";
+    "CLI not registered in any agent app — nothing to upgrade. Run `carpenter self register`.";
 
 /// `upgrade [--channel stable|nightly] [--source <p>] [--bin-dir <p>] [--no-skill]`.
 /// `name` is the install tag (adr/027) — the caller resolves it via
@@ -64,19 +64,17 @@ pub fn upgrade(
             )
         }
     };
-    let target_dir = bin_dir.map(PathBuf::from).unwrap_or(cfg.bin_dir);
+    let target_dir = paths.resolve_bin_dir(bin_dir);
     std::fs::create_dir_all(&target_dir).map_err(store::io_to_store)?;
     // The upgraded binary replaces the running one in place (the running
     // file's own name — `carpenter_nightly` upgrades `carpenter_nightly`); an
     // explicit --bin-dir targets `<dir>/<binary_file_name>` instead.
+    let bin_name = store::binary_file_name(name);
     let dest = match bin_dir {
-        Some(dir) => PathBuf::from(dir).join(store::binary_file_name(name)),
+        Some(dir) => PathBuf::from(dir).join(&bin_name),
         None => std::env::current_exe()
-            .map(|p| {
-                let s = p.display().to_string();
-                PathBuf::from(s.strip_suffix(" (deleted)").unwrap_or(&s))
-            })
-            .unwrap_or_else(|_| target_dir.join(store::binary_file_name(name))),
+            .map(|p| PathBuf::from(store::strip_deleted(&p.display().to_string())))
+            .unwrap_or_else(|_| target_dir.join(&bin_name)),
     };
     let tmp = dest.with_extension("carpenter-tmp");
     std::fs::copy(&built, &tmp).map_err(store::io_to_store)?;

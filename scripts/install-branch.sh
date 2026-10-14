@@ -35,17 +35,28 @@ case "$MODE" in
 esac
 [ -n "$TARGET_BRANCH" ] || die "no branch given and the checkout is detached"
 
-# Sanitize to the CLI's kebab-case install tag (slugify semantics).
+# Sanitize to the CLI's kebab-case install tag (slugify semantics, including
+# its 60-char truncation — the tag must match what the CLI derives from the
+# binary stem, or config/skill identity and the command name diverge).
 TAG=$(printf '%s' "$TARGET_BRANCH" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]+/-/g; s/^-+//; s/-+$//')
+TAG=$(printf '%s' "$TAG" | cut -c1-60 | sed -E 's/-+$//')
 [ -n "$TAG" ] || die "branch '$TARGET_BRANCH' sanitizes to no install tag"
 
 # Command name (adr/027): only main keeps `carpenter`; branch installs use the
 # underscored form (`carpenter_ivan_topic`). The skill/data identity stays the
 # kebab tag — agent-app skill names forbid `_`.
 BIN_NAME="carpenter"
-[ "$TAG" = "main" ] || BIN_NAME="carpenter_${TAG//[-]/_}"
+[ "$TAG" = "main" ] || BIN_NAME="carpenter_${TAG//-/_}"
 BIN_DIR="${HOME}/.local/bin"
 BIN="${BIN_DIR}/${BIN_NAME}"
+
+data_dir() { # $1 = tag → the per-OS config/data dir for that install
+    if [ "$(uname -s)" = Darwin ]; then
+        printf '%s/Library/Application Support/%s' "${HOME}" "$1"
+    else
+        printf '%s/%s' "${XDG_CONFIG_HOME:-${HOME}/.config}" "$1"
+    fi
+}
 
 detect_apps() {
     command -v opencode >/dev/null 2>&1 && printf '%s\n' opencode
@@ -57,8 +68,7 @@ if [ "$UNINSTALL" = yes ]; then
     # --yes: the script itself is the consent (the human passed --uninstall);
     # the CLI's plan/confirm gate is for bare invocations
     "$BIN" self uninstall --yes || say "note: CLI uninstall reported an error; continuing"
-    data_dir="${XDG_CONFIG_HOME:-${HOME}/.config}/$TAG"
-    [ "$(uname -s)" = Darwin ] && data_dir="${HOME}/Library/Application Support/$TAG"
+    data_dir=$(data_dir "$TAG")
     if [ -d "$data_dir" ]; then
         if [ -t 0 ]; then
             printf 'carpenter-branch: purge data dir %s? [y/N] ' "$data_dir"
@@ -104,8 +114,7 @@ say "building (cargo xtask build --release — gen-howto + gen-specs + the ship 
 mkdir -p "$BIN_DIR"
 install -m755 "$SRC_DIR/target/release/carpenter" "$BIN" || die "cannot write $BIN"
 
-data_dir="${XDG_CONFIG_HOME:-${HOME}/.config}/$TAG"
-[ "$(uname -s)" = Darwin ] && data_dir="${HOME}/Library/Application Support/$TAG"
+data_dir=$(data_dir "$TAG")
 
 apps=$(detect_apps)
 if [ -n "$apps" ]; then
