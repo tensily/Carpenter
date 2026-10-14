@@ -20,8 +20,8 @@ Global: `--version`, `--root`, `--course/-c` (default `active_course`).
 | build | `<path>` |
 | install | `[--bin-dir <p>]` |
 | upgrade | `[--source <p>] [--bin-dir <p>] [--no-skill]` |
-| register | `[--app opencode] [--print-skill]` |
-| deregister | `[--app opencode]` |
+| register | `[--print-skill]` |
+| deregister | |
 | howto | — |
 
 `register`/`deregister` = agent-app skill integration (see

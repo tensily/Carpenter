@@ -265,7 +265,7 @@ jobs:
           say "opencode on PATH: $(command -v opencode || echo 'not-found')"
           opencode --version 2>/dev/null || say "opencode --version: failed"
           say "=== carpenter's claim (register envelope) ==="
-          "$CARPENTER_INSTALL_DIR/carpenter" self register --app opencode \
+          "$CARPENTER_INSTALL_DIR/carpenter" self register \
             || say "carpenter self register: failed"
           say "=== filesystem truth ==="
           for root in "$HOME/.config/opencode" \
@@ -293,7 +293,7 @@ jobs:
           test -x "$BIN"
           "$BIN" --version
           "$BIN" howto > howto.md && test -s howto.md
-          "$BIN" self register --app opencode | grep '"status":"ok"'
+          "$BIN" self register | grep '"status":"ok"'
           { test -f "$HOME/.config/opencode/skills/carpenter/SKILL.md" \
             || test -f "$HOME/Library/Application Support/opencode/skills/carpenter/SKILL.md" \
             || test -f "$HOME/.config/opencode/skills/carpenter-nightly/SKILL.md" \

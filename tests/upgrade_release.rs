@@ -26,13 +26,11 @@ fn upgrade_release_mode_installs_and_refreshes_registered_skill() {
     let root = unique("root");
     let paths = Paths {
         config_dir: Some(root.join("xdg").join("carpenter")),
-        home: Some(root.join("home")),
         root,
     };
     let bin_dir = paths.root.join("bin");
-    // registered apps get refreshed; nothing is registered by surprise
-    carpenter::commands::register::register(&paths, "opencode", false, "carpenter")
-        .expect("pre-register");
+    // a registered skill gets refreshed; nothing is registered by surprise
+    carpenter::commands::register::register(&paths, false, "carpenter").expect("pre-register");
 
     let Data::Upgrade {
         upgraded,
@@ -63,7 +61,7 @@ fn upgrade_release_mode_installs_and_refreshes_registered_skill() {
     let outcomes = skill.expect("skill written");
     let outcomes = outcomes
         .as_array()
-        .unwrap_or_else(|| panic!("per-app outcomes, got {outcomes}"));
+        .unwrap_or_else(|| panic!("skill refresh outcome, got {outcomes}"));
     assert_eq!(outcomes.len(), 1);
     assert_eq!(outcomes[0]["app"], "opencode");
     assert_eq!(outcomes[0]["refreshed"], true, "{outcomes:?}");

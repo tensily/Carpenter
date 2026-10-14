@@ -42,27 +42,20 @@ file and no monolithic prose block ([adr/009](../adr/009-skill-assembled-from-fi
 so the skill loads without prompting. `deregister` removes only the `carpenter` key
 under `skill` (leaves the rest of the file intact). Merge, never overwrite.
 
-## Multi-app selector
-`--app <name>` (default `opencode`; never an interactive prompt — an agent cannot
-answer one):
+## The agent app
 | app | skills dir | anchor | status |
 |-----|-----------|--------|--------|
 | `opencode` | `~/.config/opencode/skills/` | XDG root | implemented |
-| `claude-code` | `~/.claude/skills/` | home dir | implemented |
-| `agents` | `~/.agents/skills/` | — | not yet supported |
 
-Both implemented apps use the same rendered `SKILL.md`; they differ in anchor
-(`skill_path` takes the XDG root **and** the home dir) and in permissions:
-opencode needs the `opencode.json` allow entry, claude code auto-discovers
-`~/.claude/skills/` — no permission merge. Adding `agents` is one more match arm.
-`upgrade`/`uninstall` fan out over all apps but touch only **registered** ones
-(skill file present).
+opencode is the only agent app. `register` writes the rendered `SKILL.md` and
+merges the `opencode.json` allow entry; `upgrade`/`uninstall` refresh/remove
+the skill only when it is **registered** (skill file present).
 
 ## Commands
 | cmd | behavior |
 |-----|----------|
-| `register [--app opencode] [--print-skill]` | write `SKILL.md` (idempotent) + merge the allow entry (`--print-skill` writes the rendered bytes to stdout instead, no filesystem change) |
-| `deregister [--app opencode]` | remove `SKILL.md` (+ dir if empty) + remove the allow key |
+| `register [--print-skill]` | write `SKILL.md` (idempotent) + merge the allow entry (`--print-skill` writes the rendered bytes to stdout instead, no filesystem change) |
+| `deregister` | remove `SKILL.md` (+ dir if empty) + remove the allow key |
 
 See [specs/21-register-deregister.md](../specs/21-register-deregister.md) for the
 envelopes. `link` (future CLI registry) is a separate concern — see

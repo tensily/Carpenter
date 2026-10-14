@@ -43,18 +43,6 @@ fn stub_opencode(root: &Path) {
     unix_chmod(&stub.join("opencode"));
 }
 
-/// Stub `claude` too, so installer app detection is hermetic: on a dev machine
-/// with a real `claude` on `$PATH` the installer detects it (the stub dir only
-/// shadows `opencode`), asks a third prompt the two-Enter script never
-/// answers, and the pty child blocks on `/dev/tty` forever. CI has no `claude`,
-/// which is why this only bites locally.
-fn stub_claude(root: &Path) {
-    let stub = root.join("stub");
-    std::fs::create_dir_all(&stub).unwrap();
-    std::fs::write(stub.join("claude"), "#!/bin/sh\nexit 0\n").unwrap();
-    unix_chmod(&stub.join("claude"));
-}
-
 fn run_installer(script: &Path, root: &Path, fixture: &Path) -> std::process::Output {
     Command::new("sh")
         .arg(script)
@@ -223,7 +211,6 @@ fn install_sh_enter_defaults_proceed_and_register() {
     let fixture = release_fixture(target);
     let root = setup("install-enter");
     stub_opencode(&root);
-    stub_claude(&root);
     let bin_dir = root.join("bin");
 
     let mut pty = Pty::spawn(
@@ -236,11 +223,6 @@ fn install_sh_enter_defaults_proceed_and_register() {
     pty.send(""); // Enter takes the encouraged default
     pty.expect("register prompt", "register the skill for opencode? [Y/n]");
     pty.send("");
-    pty.expect(
-        "claude register prompt",
-        "register the skill for claude-code? [Y/n]",
-    );
-    pty.send("");
     let text = pty.finish();
 
     assert!(
@@ -248,24 +230,11 @@ fn install_sh_enter_defaults_proceed_and_register() {
         "Enter at the register prompt registers: {text}"
     );
     assert!(
-        text.contains("registered in claude-code (skill)"),
-        "Enter at the claude-code register prompt registers: {text}"
-    );
-    assert!(
         bin_dir.join("carpenter_nightly").is_file(),
         "Enter at the consent prompt installs the binary"
     );
     let (skill_md, _perms) = common::opencode_paths(&root);
     assert!(skill_md.is_file(), "skill registered at {skill_md:?}");
-    let claude_md = root
-        .join(".claude")
-        .join("skills")
-        .join("carpenter-nightly")
-        .join("SKILL.md");
-    assert!(
-        claude_md.is_file(),
-        "claude-code skill registered at {claude_md:?}"
-    );
 
     let _ = std::fs::remove_dir_all(&root);
     let _ = std::fs::remove_dir_all(&fixture);
