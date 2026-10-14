@@ -556,13 +556,7 @@ fn self_group() -> Command {
         )
         .subcommand(
             Command::new("register")
-                .about("Register the carpenter skill with an agent app (writes SKILL.md; opencode also gets a permission entry).")
-                .arg(
-                    Arg::new("app")
-                        .long("app")
-                        .default_value("opencode")
-                        .help("Agent app (opencode|claude-code)."),
-                )
+                .about("Register the carpenter skill with opencode (writes SKILL.md + a permission entry).")
                 .arg(
                     Arg::new("print-skill")
                         .long("print-skill")
@@ -572,13 +566,7 @@ fn self_group() -> Command {
         )
         .subcommand(
             Command::new("deregister")
-                .about("Deregister the carpenter skill (removes SKILL.md; opencode also loses its permission entry). Prints a plan and asks for confirmation; --yes skips.")
-                .arg(
-                    Arg::new("app")
-                        .long("app")
-                        .default_value("opencode")
-                        .help("Agent app (opencode|claude-code)."),
-                )
+                .about("Deregister the carpenter skill (removes SKILL.md + the permission entry). Prints a plan and asks for confirmation; --yes skips.")
                 .arg(yes_arg()),
         )
         .subcommand(
@@ -746,7 +734,6 @@ fn paths_from(matches: &ArgMatches) -> Paths {
     Paths {
         root,
         config_dir: core::store::config_dir(),
-        home: core::store::home_dir(),
     }
 }
 
@@ -1100,6 +1087,9 @@ fn self_cmd(paths: &Paths, sub: &ArgMatches) -> Result<Data, core::error::Carpen
     fn bin_dir(m: &ArgMatches) -> Option<&str> {
         m.get_one::<String>("bin-dir").map(|s| s.as_str())
     }
+    // one identity resolution per dispatch — every install-lifecycle fn takes
+    // the same tag (adr/027)
+    let name = core::store::install_name();
     match sub.subcommand() {
         Some(("install", m)) => commands::install::install(paths, bin_dir(m)),
         Some(("upgrade", m)) => commands::upgrade::upgrade(
@@ -1110,27 +1100,21 @@ fn self_cmd(paths: &Paths, sub: &ArgMatches) -> Result<Data, core::error::Carpen
             m.get_one::<String>("channel")
                 .map(|s| s.as_str())
                 .unwrap_or("stable"),
-            &core::store::install_name(),
+            &name,
         ),
         Some(("uninstall", m)) => commands::uninstall::uninstall(
             paths,
             bin_dir(m),
             m.get_flag("purge-config"),
             m.get_flag("yes"),
-            &core::store::install_name(),
+            &name,
         ),
-        Some(("register", m)) => commands::register::register(
-            paths,
-            &arg_string(m, "app"),
-            m.get_flag("print-skill"),
-            &core::store::install_name(),
-        ),
-        Some(("deregister", m)) => commands::deregister::deregister(
-            paths,
-            &arg_string(m, "app"),
-            m.get_flag("yes"),
-            &core::store::install_name(),
-        ),
+        Some(("register", m)) => {
+            commands::register::register(paths, m.get_flag("print-skill"), &name)
+        }
+        Some(("deregister", m)) => {
+            commands::deregister::deregister(paths, m.get_flag("yes"), &name)
+        }
         Some(("list", m)) => commands::installs::list(paths, bin_dir(m)),
         Some(("remove", m)) => commands::installs::remove(
             paths,

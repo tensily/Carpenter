@@ -3,8 +3,8 @@
 Date: 2026-08-08 · Status: Accepted
 
 ## Context
-carpenter must be discoverable by an external agent (opencode, and later
-claude-code / generic agents). Two opencode integration paths exist: generate
+carpenter must be discoverable by an external agent (opencode). Two opencode
+integration paths exist: generate
 custom-tool `.ts` files (`.opencode/tools/`) that shell out per command, or drop a
 single `SKILL.md` into the app's skills directory. The agent already has a `bash`
 tool and carpenter already self-documents via `carpenter howto`.
@@ -21,15 +21,16 @@ command list.
   and no per-command Zod/schema drift.
 + The command surface has a single source (`howto`, scraped from `clap`); the skill
   is just the activation entry point. DRY across docs and integration.
-+ Works uniformly across opencode / claude-code / agents (same `SKILL.md` format,
-  different dirs) — the `--app` selector is one match arm each.
++ One anchor to resolve (the XDG root) and one permission store to merge — the
+  integration stays a single `register`/`deregister` pair.
 − The agent calls carpenter through `bash` (running `carpenter <cmd>`), so it does
   not get typed per-command tool args; it relies on `howto` + `docs/specs/` for
   argument shapes. Acceptable: validation stays in carpenter either way.
 
-## Update (2026-08-27)
+## Update (2026-10-14)
 
-`claude-code` is implemented (`App::ClaudeCode`): same rendered `SKILL.md`, written
-to `~/.claude/skills/carpenter/SKILL.md` (a home-dir anchor, not the XDG root) with
-**no permission merge** — claude code auto-discovers skills. `agents` remains
-unimplemented. See [design/15](../design/15-opencode-integration.md).
+opencode is the only supported agent app. Registration is flag-free
+(`carpenter self register`): the skill path and the `opencode.json` permission
+entry both derive from the XDG root. `upgrade`/`uninstall` touch the skill only
+when it is registered (skill file present). See
+[design/15](../design/15-opencode-integration.md).

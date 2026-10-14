@@ -48,7 +48,7 @@ other bijectively for sanitized names).
   truncates/collides). The `.githooks/pre-commit` hook enforces it at commit
   time; the convention is documented in `docs/README.md`.
 - **Name flows as a parameter** through `skill::register/deregister/render`,
-  `App::skill_path`, and the `register`/`deregister`/`uninstall` commands
+  `skill::skill_path`, and the `register`/`deregister`/`uninstall` commands
   (resolved at the `app.rs` dispatch); unit tests pin `"carpenter"` so they
   stay independent of the test binary's own stem. `uninstall` removes
   `<bin_dir>/<install_name>`, so cleanup is per-install too.

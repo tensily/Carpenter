@@ -5,8 +5,8 @@
 |-----|-------|-------------|
 | `build <path>` | target dir | `{"path":"/courses/ds","slug":"ds","created":["course.json","course.db","lessons/"]}` — scaffolds course.json + course.db + lessons/ |
 | `self install [--bin-dir <p>]` | — | `{"installed":true,"already_present":false,"bin":"~/.local/bin/carpenter","on_path":true}` — `on_path` = whether `bin_dir` resolves on `$PATH`; `already_present` = the target binary existed before this install |
-| `self upgrade [--channel stable|nightly] [--source <p>] [--bin-dir <p>] [--no-skill]` | no flag → latest **stable** release; `--channel nightly` → rolling prerelease; `--source` → config `source_dir` → local build | `{"upgraded":true,"version":"0.12.0","bin":"~/.local/bin/carpenter","source":"https://github.com/tensily/Carpenter/releases/latest/download/carpenter-x86_64-unknown-linux-musl.tar.gz","skill":[{"app":"opencode","path":"~/.config/opencode/skills/carpenter/SKILL.md","refreshed":true},{"app":"claude-code","path":"~/.claude/skills/carpenter/SKILL.md","refreshed":true}]}` — `skill` = per-app refresh outcomes (one per registered app): `[{"refreshed":true,"app":"opencode",…},{"refreshed":true,"app":"claude-code",…}]` · nothing registered ⇒ `{refreshed:false,reason:"not_registered",warning:"…"}` · `--no-skill` ⇒ `skill:null` |
-| `self uninstall [--bin-dir <p>] [--purge-config] [--yes]` | — | `{"uninstalled":true,"bin":"~/.local/bin/carpenter","skill":[{"app":"opencode","path":"~/.config/opencode/skills/carpenter/SKILL.md","removed":true},{"app":"claude-code","path":"~/.claude/skills/carpenter/SKILL.md","removed":true}],"config_purged":false}` — prints a removal plan and confirms on stdin unless `--yes` (decline/EOF ⇒ `Conflict`) · `skill` = per-app removal outcomes (one per registered app): `[{"removed":true,"app":"opencode",…},{"removed":true,"app":"claude-code",…}]` · nothing registered ⇒ `{removed:false,reason:"not_registered"}` · `bin:null` when no binary was present · `NotFound` when no skill, binary, or data dir exists |
+| `self upgrade [--channel stable|nightly] [--source <p>] [--bin-dir <p>] [--no-skill]` | no flag → latest **stable** release; `--channel nightly` → rolling prerelease; `--source` → config `source_dir` → local build | `{"upgraded":true,"version":"0.12.0","bin":"~/.local/bin/carpenter","source":"https://github.com/tensily/Carpenter/releases/latest/download/carpenter-x86_64-unknown-linux-musl.tar.gz","skill":[{"app":"opencode","path":"~/.config/opencode/skills/carpenter/SKILL.md","refreshed":true}]}` — `skill` = refresh outcome: `[{"refreshed":true,"app":"opencode",…}]` when registered · nothing registered ⇒ `{refreshed:false,reason:"not_registered",warning:"…"}` · `--no-skill` ⇒ `skill:null` |
+| `self uninstall [--bin-dir <p>] [--purge-config] [--yes]` | — | `{"uninstalled":true,"bin":"~/.local/bin/carpenter","skill":[{"app":"opencode","path":"~/.config/opencode/skills/carpenter/SKILL.md","removed":true}],"config_purged":false}` — prints a removal plan and confirms on stdin unless `--yes` (decline/EOF ⇒ `Conflict`) · `skill` = removal outcome: `[{"removed":true,"app":"opencode",…}]` when registered · nothing registered ⇒ `{removed:false,reason:"not_registered"}` · `bin:null` when no binary was present · `NotFound` when no skill, binary, or data dir exists |
 <!-- END GENERATED -->
 
 `self upgrade` mode resolves: `--source <p>` → config `source_dir` → **published
@@ -14,23 +14,23 @@ release** (curl + `SHA256SUMS` verify + extract — the same pipeline
 `scripts/install.sh` uses). The release channel (adr/021) picks the base URL:
 `stable` (default) follows the Latest release published from `main`;
 `--channel nightly` follows the rolling prerelease published from the
-`nightly` branch. Both modes refresh the skill of every **registered**
-app (skill file present; opencode `~/.config/opencode/skills/`, claude-code
-`~/.claude/skills/`) — nothing is registered that wasn't already (installer
-parity with the confirming installer). When no app is registered the outcome is
-`{refreshed:false,reason:"not_registered",warning:"…"}`; otherwise `skill` is an
-array of per-app outcomes. `--no-skill` skips both (`skill:null`).
+`nightly` branch. Both modes refresh the skill if **registered**
+(skill file present; opencode `~/.config/opencode/skills/`) — nothing is
+registered that wasn't already (installer parity with the confirming
+installer). When the skill is not registered the outcome is
+`{refreshed:false,reason:"not_registered",warning:"…"}`; otherwise `skill` is
+the refresh outcome. `--no-skill` skips both (`skill:null`).
 The `not_registered` warning string is single-sourced here; see
 [adr/004](../adr/004-build-install-split.md), [adr/018](../adr/018-upgrade-fetches-release.md),
 [adr/021](../adr/021-nightly-main-channels.md).
 
 `self uninstall` is the inverse of `self install`/`self register` ([adr/019](../adr/019-uninstall-semantics.md)):
-it first prints a **removal plan** to stderr (binary, per-app skill paths,
+it first prints a **removal plan** to stderr (binary, the skill path,
 config, kept data dir) and asks for confirmation on stdin — explicit `y`/`Y`
 proceeds; Enter, any other answer, or EOF (no confirmation stream, e.g. a
 piped/closed stdin) declines with a `Conflict` envelope and nothing is removed.
 `--yes` skips the prompt (non-interactive). Confirmed, the run mirrors the
-plan: skill removal (every registered app, each best-effort —
+plan: skill removal (best-effort —
 `{removed:false,reason:"not_registered"}` when none, never fails the run), then
 the binary is deleted (safe while running on Linux/macOS). `NotFound` only when
 no leg exists at all — no skill, no binary, **and** no data dir. Config is kept
@@ -41,7 +41,7 @@ machine-global per tag (adr/027) — `--bin-dir` scopes only the binary.
 
 The `curl | sh` installer (`scripts/install.sh`) is the human-facing sibling of
 `upgrade`'s release pipeline: branded banner + install plan (download source,
-checksum, binary destination, per-app skill paths + permission merge, PATH
+checksum, binary destination, the skill path + permission merge, PATH
 status), explicit consent when a TTY is attached (declining aborts before any
 download), plan-and-proceed when not. Channel-correct by construction — the
 stable release attaches a tag-patched copy ([adr/021](../adr/021-nightly-main-channels.md))

@@ -83,11 +83,7 @@ fn uninstall_self_deletes_running_binary() {
     write_config(&root);
 
     // register via the installed copy (skill + permission land in the sandbox)
-    let (ok, env) = run(sandboxed(&bin, &root)
-        .arg("self")
-        .arg("register")
-        .arg("--app")
-        .arg("opencode"));
+    let (ok, env) = run(sandboxed(&bin, &root).arg("self").arg("register"));
     assert!(ok, "{env}");
     assert!(skill_md.is_file(), "skill at {}", skill_md.display());
     assert!(opencode_has_carpenter_key(&perms), "permission key present");
@@ -273,86 +269,6 @@ fn install_sh_then_uninstall_reverses_footprint() {
     let _ = std::fs::remove_dir_all(&fixture);
 }
 
-/// The installer also detects claude code (`claude` on PATH) and registers into
-/// `~/.claude/skills/` (non-interactive lane: auto-register every detection);
-/// `uninstall` reverses that footprint too.
-#[test]
-fn install_sh_detects_and_registers_claude_code() {
-    let Some(target) = common::platform_target() else {
-        return;
-    };
-    if !Command::new("sh").arg("-c").arg("exit 0").status().is_ok() {
-        return;
-    }
-    let fixture = release_fixture(target);
-    let root = setup("uninstall-claude");
-    let bin_dir = root.join("bin");
-    let stub = root.join("stub");
-    std::fs::create_dir_all(&stub).unwrap();
-    std::fs::write(stub.join("claude"), "#!/bin/sh\nexit 0\n").unwrap();
-    unix_chmod(&stub.join("claude"));
-
-    let script = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("scripts")
-        .join("install.sh");
-    let out = Command::new("sh")
-        .arg(&script)
-        .env("HOME", &root)
-        .env("XDG_CONFIG_HOME", common::config_root(&root))
-        .env(
-            "CARPENTER_DOWNLOAD_BASE",
-            format!("file://{}", fixture.display()),
-        )
-        .env("CARPENTER_INSTALL_DIR", &bin_dir)
-        .env(
-            "PATH",
-            format!(
-                "{}:{}",
-                stub.display(),
-                std::env::var("PATH").unwrap_or_default()
-            ),
-        )
-        .output()
-        .unwrap();
-    assert!(
-        out.status.success(),
-        "install.sh failed: {}{}",
-        String::from_utf8_lossy(&out.stdout),
-        String::from_utf8_lossy(&out.stderr)
-    );
-
-    let bin = bin_dir.join("carpenter_nightly");
-    let skill_md = root
-        .join(".claude")
-        .join("skills")
-        .join("carpenter-nightly")
-        .join("SKILL.md");
-    assert!(
-        bin.is_file(),
-        "installer placed binary at {}",
-        bin.display()
-    );
-    assert!(
-        skill_md.is_file(),
-        "installer registered claude-code skill at {}",
-        skill_md.display()
-    );
-
-    // uninstall from the installed copy — reverses the claude-code footprint
-    let (ok, env) = run(sandboxed(&bin, &root)
-        .arg("self")
-        .arg("uninstall")
-        .arg("--yes")
-        .arg("--bin-dir")
-        .arg(&bin_dir));
-    assert!(ok, "{env}");
-    assert!(!bin.exists(), "binary removed");
-    assert!(!skill_md.exists(), "claude-code skill removed");
-
-    let _ = std::fs::remove_dir_all(&root);
-    let _ = std::fs::remove_dir_all(&fixture);
-}
-
 /// Without `--yes` and with no interactive stdin (`Command::output` closes it),
 /// the confirmation reads EOF and the removal aborts with a `Conflict`
 /// envelope — and nothing is removed (adr/019 revision).
@@ -361,11 +277,7 @@ fn uninstall_without_yes_aborts_when_non_interactive() {
     let root = setup("uninstall-noconfirm");
     let bin = install_copy(&root);
     let (skill_md, _) = opencode_paths(&root);
-    let (ok, env) = run(sandboxed(&bin, &root)
-        .arg("self")
-        .arg("register")
-        .arg("--app")
-        .arg("opencode"));
+    let (ok, env) = run(sandboxed(&bin, &root).arg("self").arg("register"));
     assert!(ok, "{env}");
 
     let (ok, env) = run(sandboxed(&bin, &root)
@@ -389,11 +301,7 @@ fn remove_and_deregister_abort_without_yes_when_non_interactive() {
     let root = setup("remove-noconfirm");
     let bin = install_copy(&root);
     let (skill_md, _) = opencode_paths(&root);
-    let (ok, env) = run(sandboxed(&bin, &root)
-        .arg("self")
-        .arg("register")
-        .arg("--app")
-        .arg("opencode"));
+    let (ok, env) = run(sandboxed(&bin, &root).arg("self").arg("register"));
     assert!(ok, "{env}");
 
     let (ok, env) = run(sandboxed(&bin, &root)
@@ -407,11 +315,7 @@ fn remove_and_deregister_abort_without_yes_when_non_interactive() {
     assert!(bin.exists(), "binary untouched without confirmation");
     assert!(skill_md.exists(), "skill untouched without confirmation");
 
-    let (ok, env) = run(sandboxed(&bin, &root)
-        .arg("self")
-        .arg("deregister")
-        .arg("--app")
-        .arg("opencode"));
+    let (ok, env) = run(sandboxed(&bin, &root).arg("self").arg("deregister"));
     assert!(!ok, "{env}");
     assert_eq!(env["code"], "Conflict", "{env}");
     assert!(skill_md.exists(), "skill untouched without confirmation");
@@ -429,11 +333,7 @@ fn remove_accepts_piped_confirmation() {
     let root = setup("remove-piped-yes");
     let bin = install_copy(&root);
     let (skill_md, _) = opencode_paths(&root);
-    let (ok, env) = run(sandboxed(&bin, &root)
-        .arg("self")
-        .arg("register")
-        .arg("--app")
-        .arg("opencode"));
+    let (ok, env) = run(sandboxed(&bin, &root).arg("self").arg("register"));
     assert!(ok, "{env}");
 
     let mut child = sandboxed(&bin, &root)

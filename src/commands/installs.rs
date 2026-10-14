@@ -11,15 +11,11 @@ use crate::core::installs;
 use crate::core::store::{self, Paths};
 use crate::models::Data;
 
-/// `installs list [--bin-dir <p>]`.
+/// `self list [--bin-dir <p>]`.
 pub fn list(paths: &Paths, bin_dir: Option<&str>) -> Result<Data, CarpenterError> {
-    let cfg = paths
-        .config_file()
-        .map(|p| crate::core::config::load_from(&p))
-        .unwrap_or_default();
-    let target_dir = bin_dir.map(std::path::PathBuf::from).unwrap_or(cfg.bin_dir);
+    let target_dir = paths.resolve_bin_dir(bin_dir);
     let xdg = paths.xdg_root()?;
-    let found = installs::list(&target_dir, xdg, paths.home_dir()?);
+    let found = installs::list(&target_dir, xdg);
     Ok(Data::InstallsList {
         installs: found
             .into_iter()
@@ -33,7 +29,7 @@ pub fn list(paths: &Paths, bin_dir: Option<&str>) -> Result<Data, CarpenterError
     })
 }
 
-/// `installs remove <tag> [--bin-dir <p>] [--purge-config] [--yes]`. The `tag`
+/// `self remove <tag> [--bin-dir <p>] [--purge-config] [--yes]`. The `tag`
 /// must be kebab-case (`^[a-z0-9]+(-[a-z0-9]+)*$`, max 60) — a `carpenter` or
 /// `carpenter-<branch>` stem (adr/027). Prints the removal plan and asks for
 /// confirmation unless `--yes` (adr/019 revision); a declined or absent
@@ -63,7 +59,7 @@ pub fn remove(
 mod tests {
     use super::*;
     use crate::commands::testutil;
-    use crate::core::skill::App;
+    use crate::models::Data;
     use serde_json::json;
 
     #[test]
@@ -76,7 +72,7 @@ mod tests {
         // a non-carpenter binary and a directory must be ignored
         std::fs::write(bin_dir.join("other-tool"), b"fake").unwrap();
         std::fs::create_dir_all(bin_dir.join("carpenter-weird")).unwrap();
-        crate::commands::register::register(&paths, "opencode", false, "carpenter-ivan-topic")
+        crate::commands::register::register(&paths, false, "carpenter-ivan-topic")
             .expect("register tagged skill");
         let Data::InstallsList { installs } =
             list(&paths, Some(bin_dir.to_str().unwrap())).expect("list")
@@ -106,8 +102,7 @@ mod tests {
         let bin_dir = paths.root.join("bin");
         std::fs::create_dir_all(&bin_dir).unwrap();
         // no binaries at all — install visible only through its skill + data dir
-        crate::commands::register::register(&paths, "claude-code", false, "carpenter-old")
-            .expect("register");
+        crate::commands::register::register(&paths, false, "carpenter-old").expect("register");
         std::fs::create_dir_all(paths.xdg_root().unwrap().join("carpenter-stale")).unwrap();
         let Data::InstallsList { installs } =
             list(&paths, Some(bin_dir.to_str().unwrap())).expect("list")
@@ -118,7 +113,7 @@ mod tests {
         assert!(tags.contains(&"carpenter-old"), "{tags:?}");
         assert!(tags.contains(&"carpenter-stale"), "{tags:?}");
         let old = installs.iter().find(|r| r.tag == "carpenter-old").unwrap();
-        assert_eq!(old.skill_apps, vec![String::from("claude-code")]);
+        assert_eq!(old.skill_apps, vec![String::from("opencode")]);
         assert_eq!(old.bin, None);
         let _ = std::fs::remove_dir_all(&paths.root);
     }
@@ -127,7 +122,7 @@ mod tests {
     fn remove_targets_any_install_by_tag() {
         let paths = testutil::meta_setup();
         // this process "is" the stock install; it removes a tagged one
-        crate::commands::register::register(&paths, "opencode", false, "carpenter-ivan-topic")
+        crate::commands::register::register(&paths, false, "carpenter-ivan-topic")
             .expect("register");
         let bin_dir = paths.root.join("bin");
         std::fs::create_dir_all(&bin_dir).unwrap();
@@ -157,7 +152,7 @@ mod tests {
             .unwrap()
             .join("opencode/skills/carpenter-ivan-topic")
             .exists());
-        let arr = skill.as_array().expect("per-app outcomes");
+        let arr = skill.as_array().expect("skill removal outcome");
         assert_eq!(arr[0]["removed"], json!(true));
         assert!(!config_purged);
     }
@@ -328,11 +323,7 @@ mod tests {
     #[test]
     fn skill_paths_carry_the_tag() {
         let paths = testutil::meta_setup();
-        let p = App::Opencode.skill_path(
-            paths.xdg_root().unwrap(),
-            paths.home_dir().unwrap(),
-            "carpenter-x",
-        );
+        let p = crate::core::skill::skill_path(paths.xdg_root().unwrap(), "carpenter-x");
         assert!(p.ends_with("opencode/skills/carpenter-x/SKILL.md"), "{p:?}");
         let _ = std::fs::remove_dir_all(paths.root);
     }

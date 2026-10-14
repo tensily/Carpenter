@@ -7,17 +7,14 @@ Global scope only.
 <!-- BEGIN GENERATED -->
 | cmd | input | `data` (ok) |
 |-----|-------|-------------|
-| `self register [--app opencode]` | --app (default `opencode`) | `{"app":"opencode","path":"~/.config/opencode/skills/carpenter/SKILL.md","version":"0.12.0","installed":true}` — writes `SKILL.md` + merges `"skill":{"carpenter":"allow"}`; `agents` ⇒ `ValidationError` |
-| `self register --app claude-code` | --app | `{"app":"claude-code","path":"~/.claude/skills/carpenter/SKILL.md","version":"0.12.0","installed":true}` — writes `SKILL.md` into `~/.claude/skills/` (auto-discovered — no permission merge) |
-| `self register --print-skill` | --app | `{"skill":"…"}` — prints the rendered `SKILL.md` bytes; no filesystem change |
-| `self deregister [--app opencode]` | --app (default `opencode`) | `{"app":"opencode","path":"~/.config/opencode/skills/carpenter/SKILL.md","removed":true}` — removes `SKILL.md` (+ dir if empty) + the `carpenter` allow key (apps that have one); `NotFound` if absent |
+| `self register [--print-skill]` | no flags (opencode is the only agent app) | `{"app":"opencode","path":"~/.config/opencode/skills/carpenter/SKILL.md","version":"0.12.0","installed":true}` — writes `SKILL.md` + merges `"skill":{"carpenter":"allow"}` into `opencode.json` |
+| `self register --print-skill` | --print-skill | `{"skill":"…"}` — prints the rendered `SKILL.md` bytes; no filesystem change |
+| `self deregister [--yes]` | --yes skips the confirmation plan | `{"app":"opencode","path":"~/.config/opencode/skills/carpenter/SKILL.md","removed":true}` — removes `SKILL.md` (+ dir if empty) + the `carpenter` allow key; `NotFound` if absent |
 <!-- END GENERATED -->
 
-`--app` values: `opencode` and `claude-code` (both write the same rendered
-`SKILL.md` — opencode into `~/.config/opencode/skills/` + an allow entry,
-claude-code into `~/.claude/skills/` with no permission merge), `agents` ⇒
-`ValidationError` ("not yet supported"). The `--app` selector defaults to
-`opencode` — it is never an interactive TTY prompt (an agent cannot answer one;
+`self register` targets opencode — the only agent app (opencode into
+`~/.config/opencode/skills/` + an allow entry in `opencode.json`). It is never
+an interactive TTY prompt surface (an agent cannot answer one;
 see [01-envelope.md](01-envelope.md) `--force` policy).
 
 `self deregister` is destructive (it removes the machine-global skill an app

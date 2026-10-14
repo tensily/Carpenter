@@ -19,7 +19,6 @@ pub fn setup() -> (Paths, String) {
     let paths = Paths {
         root,
         config_dir: Some(config_dir),
-        home: None,
     };
     let slug = match course::create(&paths, COURSE_SPEC).expect("setup course") {
         crate::models::Data::CourseCreate { slug, .. } => slug,
@@ -31,17 +30,14 @@ pub fn setup() -> (Paths, String) {
 /// Create a temp workspace (root + config_dir) with no course; for meta-command
 /// tests (bug/feature, config, register, …). `config_dir` is a `carpenter` leaf
 /// under a unique parent so [`Paths::xdg_root`](crate::core::store::Paths::xdg_root)
-/// (the sibling `opencode/` anchor) — and `home` (the claude-code `~/.claude`
-/// anchor) — are per-test-isolated.
+/// (the sibling `opencode/` anchor) is per-test-isolated.
 pub fn meta_setup() -> Paths {
     let n = N.fetch_add(1, Ordering::SeqCst);
     let root = std::env::temp_dir().join(format!("carpenter-meta-{}-{n}", std::process::id()));
     let config_dir = root.join("xdg").join("carpenter");
-    let home = root.join("home");
     let _ = std::fs::remove_dir_all(&root);
     Paths {
         root,
         config_dir: Some(config_dir),
-        home: Some(home),
     }
 }

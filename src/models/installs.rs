@@ -1,5 +1,5 @@
 //! Output types + examples for `installs list`/`installs remove`
-//! (docs/specs/24-installs.md).
+//! (docs/specs/24-self.md).
 
 use serde::Serialize;
 
@@ -33,7 +33,7 @@ pub mod examples {
                         InstallRow {
                             tag: String::from("carpenter"),
                             bin: Some(String::from("~/.local/bin/carpenter")),
-                            skill_apps: vec![String::from("opencode"), String::from("claude-code")],
+                            skill_apps: vec![String::from("opencode")],
                             data_dir: String::from("~/.config/carpenter"),
                         },
                         InstallRow {

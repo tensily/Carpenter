@@ -15,7 +15,7 @@ error:  {"status":"error", "message":"…", "code":"NotFound", "details":{ … }
 - `NotFound` — requested id/slug does not exist.
 - `AlreadyExists` — create would collide (e.g. duplicate slug, `.venv` present).
 - `ValidationError` — bad `--spec` YAML, unknown enum value, failed cross-field
-  validation, or an unsupported flag value (e.g. `register --app agents`).
+  validation, or an unsupported flag value (e.g. `upgrade --channel edge`).
 - `StoreError` — SQLite failure, missing file (e.g. no course venv for `quiz run`),
   or `uv`/`jupyter` not on PATH.
 - `ExecuteError` — a managed/scaffolding cell errored during execution (see

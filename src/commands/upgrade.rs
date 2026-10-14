@@ -6,8 +6,8 @@
 //! --release`). Release mode picks its channel via `--channel stable|nightly`
 //! (adr/021): `stable` (default) follows the Latest release published from
 //! `main`; `nightly` follows the rolling prerelease published from the
-//! `nightly` branch. Both modes refresh the skill of every **registered** app
-//! (installer parity — the confirming installer never registers a new app;
+//! `nightly` branch. Both modes refresh the skill if **registered**
+//! (installer parity — the confirming installer never registers a new skill;
 //! adr/018 update). `--bin-dir`/`--no-skill` apply to both.
 
 use std::path::{Path, PathBuf};
@@ -18,13 +18,13 @@ use crate::core::config;
 use crate::core::error::CarpenterError;
 use crate::core::exec;
 use crate::core::release::{self, Staged};
-use crate::core::skill::{self, App};
+use crate::core::skill;
 use crate::core::store::{self, Paths};
 use crate::models::Data;
 
 /// The single-sourced "not registered" warning (spec 18).
 const NOT_REGISTERED_WARNING: &str =
-    "CLI not registered in any agent app — nothing to upgrade. Run `carpenter register`.";
+    "CLI not registered in any agent app — nothing to upgrade. Run `carpenter self register`.";
 
 /// `upgrade [--channel stable|nightly] [--source <p>] [--bin-dir <p>] [--no-skill]`.
 /// `name` is the install tag (adr/027) — the caller resolves it via
@@ -64,19 +64,17 @@ pub fn upgrade(
             )
         }
     };
-    let target_dir = bin_dir.map(PathBuf::from).unwrap_or(cfg.bin_dir);
+    let target_dir = paths.resolve_bin_dir(bin_dir);
     std::fs::create_dir_all(&target_dir).map_err(store::io_to_store)?;
     // The upgraded binary replaces the running one in place (the running
     // file's own name — `carpenter_nightly` upgrades `carpenter_nightly`); an
     // explicit --bin-dir targets `<dir>/<binary_file_name>` instead.
+    let bin_name = store::binary_file_name(name);
     let dest = match bin_dir {
-        Some(dir) => PathBuf::from(dir).join(store::binary_file_name(name)),
+        Some(dir) => PathBuf::from(dir).join(&bin_name),
         None => std::env::current_exe()
-            .map(|p| {
-                let s = p.display().to_string();
-                PathBuf::from(s.strip_suffix(" (deleted)").unwrap_or(&s))
-            })
-            .unwrap_or_else(|_| target_dir.join(store::binary_file_name(name))),
+            .map(|p| PathBuf::from(store::strip_deleted(&p.display().to_string())))
+            .unwrap_or_else(|_| target_dir.join(&bin_name)),
     };
     let tmp = dest.with_extension("carpenter-tmp");
     std::fs::copy(&built, &tmp).map_err(store::io_to_store)?;
@@ -148,34 +146,21 @@ fn build_from_source(source_dir: &Path) -> Result<PathBuf, CarpenterError> {
     Ok(built)
 }
 
-/// Refresh the skill of every registered app (skill file present), best-effort:
-/// a failure never fails the upgrade, and no app is registered that wasn't
+/// Refresh the skill if registered (skill file present), best-effort:
+/// a failure never fails the upgrade, and no skill is registered that wasn't
 /// already (the installer only registers on confirmation — parity).
 fn skill_outcome_for(paths: &Paths, name: &str) -> Value {
-    let (root, home) = match (paths.xdg_root(), paths.home_dir()) {
-        (Ok(r), Ok(h)) => (r, h),
-        (Err(e), _) | (_, Err(e)) => {
-            return json!({"refreshed": false, "reason": "no_anchor", "error": e.to_string()})
-        }
+    let root = match paths.xdg_root() {
+        Ok(r) => r,
+        Err(e) => return json!({"refreshed": false, "reason": "no_anchor", "error": e.to_string()}),
     };
-    let registered: Vec<App> = App::all()
-        .into_iter()
-        .filter(|app| app.skill_path(root, home, name).exists())
-        .collect();
-    if registered.is_empty() {
+    if !skill::skill_path(root, name).exists() {
         return json!({"refreshed": false, "reason": "not_registered", "warning": NOT_REGISTERED_WARNING});
     }
-    Value::Array(
-        registered
-            .into_iter()
-            .map(|app| match skill::register(app, root, home, name) {
-                Ok(r) => json!({"refreshed": true, "app": r.app, "path": r.path}),
-                Err(e) => {
-                    json!({"refreshed": false, "reason": "refresh_failed", "error": e.to_string()})
-                }
-            })
-            .collect(),
-    )
+    Value::Array(vec![match skill::register(root, name) {
+        Ok(r) => json!({"refreshed": true, "app": r.app, "path": r.path}),
+        Err(e) => json!({"refreshed": false, "reason": "refresh_failed", "error": e.to_string()}),
+    }])
 }
 
 #[cfg(test)]
@@ -246,27 +231,18 @@ mod tests {
     }
 
     #[test]
-    fn skill_outcome_refreshes_only_registered_apps() {
+    fn skill_outcome_refreshes_only_registered_skills() {
         let paths = testutil::meta_setup();
-        let root = paths.xdg_root().unwrap();
-        let home = paths.home_dir().unwrap();
         // nothing registered → single not_registered outcome
         let out = skill_outcome_for(&paths, "carpenter");
         assert_eq!(out["reason"], json!("not_registered"));
-        // claude-code only → exactly one refresh, for claude-code
-        skill::register(App::ClaudeCode, root, home, "carpenter").unwrap();
+        // registered → exactly one refresh, for opencode
+        skill::register(paths.xdg_root().unwrap(), "carpenter").unwrap();
         let out = skill_outcome_for(&paths, "carpenter");
         let arr = out.as_array().unwrap();
         assert_eq!(arr.len(), 1);
-        assert_eq!(arr[0]["app"], json!("claude-code"));
-        assert_eq!(arr[0]["refreshed"], json!(true));
-        // both registered → two refreshes, order = App::all()
-        skill::register(App::Opencode, root, home, "carpenter").unwrap();
-        let out = skill_outcome_for(&paths, "carpenter");
-        let arr = out.as_array().unwrap();
-        assert_eq!(arr.len(), 2);
         assert_eq!(arr[0]["app"], json!("opencode"));
-        assert_eq!(arr[1]["app"], json!("claude-code"));
+        assert_eq!(arr[0]["refreshed"], json!(true));
         let _ = std::fs::remove_dir_all(&paths.root);
     }
 }
