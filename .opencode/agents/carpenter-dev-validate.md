@@ -8,48 +8,109 @@ description: >-
   the way a real user studies — sequentially, one lesson at a time; never
   invokes lessons concurrently.
 mode: primary
-permission:
-  read:
-    "*": "deny"
-    ".sandbox": "allow"
-    ".sandbox/**": "allow"
-  glob:
-    "*": "deny"
-    ".sandbox/**": "allow"
-  list:
-    "*": "deny"
-    ".sandbox/**": "allow"
-  grep:
-    "*": "deny"
-  edit:
-    "*": "deny"
-    ".sandbox/**": "allow"
-  bash:
-    "*": "deny"
-    "cargo build": "allow"
-    "cargo build *": "allow"
-    "cargo test": "allow"
-    "cargo test *": "allow"
-    "./target/debug/carpenter *": "allow"
-    "./target/release/carpenter *": "allow"
-    "gh pr comment *": "allow"
-    "gh pr view *": "allow"
-    "gh pr checks *": "allow"
-    "gh pr diff *": "allow"
-    "gh run view *": "allow"
-    "cp target/debug/carpenter .sandbox/bin/carpenter_*": "allow"
-    "cp target/release/carpenter .sandbox/bin/carpenter_*": "allow"
-    ".sandbox/bin/carpenter_*": "allow"
-    ".sandbox/bin/carpenter_* *": "allow"
-  task:
-    "*": "deny"
-  external_directory:
-    "*": "deny"
-  webfetch: deny
-  websearch: deny
-  lsp: deny
-  question: allow
-  skill: allow
+permissions:
+  # discovery/edits confined to the sandbox (last matching rule wins)
+  - action: read
+    resource: "*"
+    effect: deny
+  - action: read
+    resource: ".sandbox"
+    effect: allow
+  - action: read
+    resource: ".sandbox/**"
+    effect: allow
+  - action: glob
+    resource: "*"
+    effect: deny
+  - action: glob
+    resource: ".sandbox/**"
+    effect: allow
+  - action: list
+    resource: "*"
+    effect: deny
+  - action: list
+    resource: ".sandbox/**"
+    effect: allow
+  - action: grep
+    resource: "*"
+    effect: deny
+  - action: edit
+    resource: "*"
+    effect: deny
+  - action: edit
+    resource: ".sandbox/**"
+    effect: allow
+  # shell: deny-all, then explicit allows (V2 action is `shell`, not `bash`)
+  - action: shell
+    resource: "*"
+    effect: deny
+  - action: shell
+    resource: "cargo build"
+    effect: allow
+  - action: shell
+    resource: "cargo build *"
+    effect: allow
+  - action: shell
+    resource: "cargo test"
+    effect: allow
+  - action: shell
+    resource: "cargo test *"
+    effect: allow
+  - action: shell
+    resource: "./target/debug/carpenter *"
+    effect: allow
+  - action: shell
+    resource: "./target/release/carpenter *"
+    effect: allow
+  - action: shell
+    resource: "git"
+    effect: allow
+  - action: shell
+    resource: "git *"
+    effect: allow
+  - action: shell
+    resource: "gh pr *"
+    effect: allow
+  - action: shell
+    resource: "gh run *"
+    effect: allow
+  - action: shell
+    resource: "gh api *"
+    effect: allow
+  - action: shell
+    resource: "cp target/debug/carpenter .sandbox/bin/carpenter_*"
+    effect: allow
+  - action: shell
+    resource: "cp target/release/carpenter .sandbox/bin/carpenter_*"
+    effect: allow
+  - action: shell
+    resource: ".sandbox/bin/carpenter_*"
+    effect: allow
+  - action: shell
+    resource: ".sandbox/bin/carpenter_* *"
+    effect: allow
+  # everything else stays locked down
+  - action: subagent
+    resource: "*"
+    effect: deny
+  - action: external_directory
+    resource: "*"
+    effect: deny
+  - action: webfetch
+    resource: "*"
+    effect: deny
+  - action: websearch
+    resource: "*"
+    effect: deny
+  - action: lsp
+    resource: "*"
+    effect: deny
+  - action: question
+    resource: "*"
+    effect: allow
+  - action: skill
+    resource: "*"
+    effect: allow
 ---
 
 You are a **black-box QA fault-hunter** for the carpenter CLI. The user gives
