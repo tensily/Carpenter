@@ -12,13 +12,13 @@ lens over all of them; `self remove` uninstalls any of them by tag — including
 <!-- BEGIN GENERATED -->
 | cmd | input | `data` (ok) |
 |-----|-------|-------------|
-| `self list` | --bin-dir (default config `bin_dir`) | `{"installs":[{"tag":"carpenter","bin":"~/.local/bin/carpenter","skill_apps":["opencode","claude-code"],"data_dir":"~/.config/carpenter"},{"tag":"carpenter-ivan-branch-installs","bin":"~/.local/bin/carpenter-ivan-branch-installs","skill_apps":["opencode"],"data_dir":"~/.config/carpenter-ivan-branch-installs"}]}` — union of `carpenter*` binaries, registered skills, and data dirs; sorted by tag |
+| `self list` | --bin-dir (default config `bin_dir`) | `{"installs":[{"tag":"carpenter","bin":"~/.local/bin/carpenter","skill_apps":["opencode"],"data_dir":"~/.config/carpenter"},{"tag":"carpenter-ivan-branch-installs","bin":"~/.local/bin/carpenter-ivan-branch-installs","skill_apps":["opencode"],"data_dir":"~/.config/carpenter-ivan-branch-installs"}]}` — union of `carpenter*` binaries, registered skills, and data dirs; sorted by tag |
 | `self remove carpenter-ivan-topic` | tag (positional) · [--bin-dir] [--purge-config] [--yes] | `{"removed":true,"tag":"carpenter-ivan-topic","bin":"~/.local/bin/carpenter-ivan-topic","skill":[{"app":"opencode","path":"~/.config/opencode/skills/carpenter-ivan-topic/SKILL.md","removed":true}],"config_purged":false}` — same removal as `uninstall`, aimed at any install by tag; prints a removal plan and confirms on stdin unless `--yes`; `NotFound` when no skill, binary, or data dir exists |
 <!-- END GENERATED -->
 
 Discovery surfaces (union, keyed by tag): `carpenter*` binaries in `bin_dir`,
-`SKILL.md` skill dirs under either agent app (`~/.config/opencode/skills/`,
-`~/.claude/skills/`), and data dirs under the config base (`~/.config/`). A
+`SKILL.md` skill dirs under opencode (`~/.config/opencode/skills/`), and data
+dirs under the config base (`~/.config/`). A
 row's `data_dir` is the path the tag derives to, whether or not it exists yet.
 
 `self remove <tag>` runs the exact [adr/019](../adr/019-uninstall-semantics.md)

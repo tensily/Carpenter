@@ -556,13 +556,7 @@ fn self_group() -> Command {
         )
         .subcommand(
             Command::new("register")
-                .about("Register the carpenter skill with an agent app (writes SKILL.md; opencode also gets a permission entry).")
-                .arg(
-                    Arg::new("app")
-                        .long("app")
-                        .default_value("opencode")
-                        .help("Agent app (opencode|claude-code)."),
-                )
+                .about("Register the carpenter skill with opencode (writes SKILL.md + a permission entry).")
                 .arg(
                     Arg::new("print-skill")
                         .long("print-skill")
@@ -572,13 +566,7 @@ fn self_group() -> Command {
         )
         .subcommand(
             Command::new("deregister")
-                .about("Deregister the carpenter skill (removes SKILL.md; opencode also loses its permission entry). Prints a plan and asks for confirmation; --yes skips.")
-                .arg(
-                    Arg::new("app")
-                        .long("app")
-                        .default_value("opencode")
-                        .help("Agent app (opencode|claude-code)."),
-                )
+                .about("Deregister the carpenter skill (removes SKILL.md + the permission entry). Prints a plan and asks for confirmation; --yes skips.")
                 .arg(yes_arg()),
         )
         .subcommand(
@@ -746,7 +734,6 @@ fn paths_from(matches: &ArgMatches) -> Paths {
     Paths {
         root,
         config_dir: core::store::config_dir(),
-        home: core::store::home_dir(),
     }
 }
 
@@ -1121,16 +1108,12 @@ fn self_cmd(paths: &Paths, sub: &ArgMatches) -> Result<Data, core::error::Carpen
         ),
         Some(("register", m)) => commands::register::register(
             paths,
-            &arg_string(m, "app"),
             m.get_flag("print-skill"),
             &core::store::install_name(),
         ),
-        Some(("deregister", m)) => commands::deregister::deregister(
-            paths,
-            &arg_string(m, "app"),
-            m.get_flag("yes"),
-            &core::store::install_name(),
-        ),
+        Some(("deregister", m)) => {
+            commands::deregister::deregister(paths, m.get_flag("yes"), &core::store::install_name())
+        }
         Some(("list", m)) => commands::installs::list(paths, bin_dir(m)),
         Some(("remove", m)) => commands::installs::remove(
             paths,

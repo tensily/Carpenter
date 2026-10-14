@@ -124,64 +124,21 @@ pub fn render(name: &str) -> Result<String, CarpenterError> {
     Ok(format!("{frontmatter}{body}"))
 }
 
-/// Which agent app to integrate with.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum App {
-    /// opencode (`~/.config/opencode/`).
-    Opencode,
-    /// claude code (`~/.claude/skills/`).
-    ClaudeCode,
+/// The agent app carpenter integrates with: opencode, anchored under the XDG
+/// root (`~/.config/opencode/` — a sibling of the `carpenter/` data dir).
+pub const APP: &str = "opencode";
+
+/// The skill file path for the skill `name` (the install tag). `root` is the
+/// XDG root (e.g. `~/.config` — opencode is a sibling of the `carpenter/`
+/// data dir).
+pub fn skill_path(root: &Path, name: &str) -> PathBuf {
+    root.join(APP).join("skills").join(name).join("SKILL.md")
 }
 
-impl App {
-    /// Every supported app (iteration order = registration order).
-    pub fn all() -> [App; 2] {
-        [App::Opencode, App::ClaudeCode]
-    }
-
-    /// Parse + validate an `--app` value.
-    pub fn parse(s: &str) -> Result<App, CarpenterError> {
-        match s {
-            "opencode" => Ok(App::Opencode),
-            "claude-code" => Ok(App::ClaudeCode),
-            "agents" => Err(CarpenterError::ValidationError(format!(
-                "app {s:?} not yet supported (only `opencode` and `claude-code`)"
-            ))),
-            other => Err(CarpenterError::ValidationError(format!(
-                "unknown app {other:?} (opencode|claude-code|agents)"
-            ))),
-        }
-    }
-
-    /// Human label.
-    pub fn name(self) -> &'static str {
-        match self {
-            App::Opencode => "opencode",
-            App::ClaudeCode => "claude-code",
-        }
-    }
-
-    /// The skill file path for the skill `name` (the install tag). `root` is
-    /// the XDG root (e.g. `~/.config` — opencode is a sibling of the
-    /// `carpenter/` data dir); `home` is the user home dir (claude code anchors
-    /// at `~/.claude/`, not the XDG root).
-    pub fn skill_path(self, root: &Path, home: &Path, name: &str) -> PathBuf {
-        let base = match self {
-            App::Opencode => root.join("opencode"),
-            App::ClaudeCode => home.join(".claude"),
-        };
-        base.join("skills").join(name).join("SKILL.md")
-    }
-
-    /// The permission file path, if the app needs one. opencode loads skills
-    /// behind a permission entry; claude code auto-discovers `~/.claude/skills/`
-    /// — no permission store to merge.
-    pub fn permission_path(self, root: &Path) -> Option<PathBuf> {
-        match self {
-            App::Opencode => Some(root.join("opencode").join("opencode.json")),
-            App::ClaudeCode => None,
-        }
-    }
+/// The permission file path. opencode loads skills behind a permission entry
+/// in its global config — there is no auto-discovery to rely on.
+fn permission_path(root: &Path) -> PathBuf {
+    root.join(APP).join("opencode.json")
 }
 
 /// A successful registration.
@@ -238,58 +195,43 @@ fn set_nested(root: &mut Value, path: &[&str], value: Value) -> Result<(), Carpe
     Ok(())
 }
 
-/// Register: render + write `SKILL.md` (idempotent) and merge the allow entry
-/// (apps that have one). `name` is the skill name / install tag (adr/027) —
+/// Register: render + write `SKILL.md` (idempotent) and merge the allow entry.
+/// `name` is the skill name / install tag (adr/027) —
 /// validated against the app name regex; the dir leaf and permission key derive
 /// from it. `root` is the XDG root containing both the `carpenter/` data dir
-/// and `opencode/`; `home` is the user home dir.
-pub fn register(
-    app: App,
-    root: &Path,
-    home: &Path,
-    name: &str,
-) -> Result<Registered, CarpenterError> {
+/// and `opencode/`.
+pub fn register(root: &Path, name: &str) -> Result<Registered, CarpenterError> {
     if !name_is_valid(name) {
         return Err(CarpenterError::ValidationError(format!(
             "invalid skill name {name:?} (lowercase kebab-case)"
         )));
     }
     let content = render(name)?;
-    let skill_path = app.skill_path(root, home, name);
+    let skill_path = skill_path(root, name);
     store::atomic_write(&skill_path, content.as_bytes())?;
-    if let Some(perm_path) = app.permission_path(root) {
-        let mut perm_root =
-            read_json(&perm_path)?.unwrap_or_else(|| Value::Object(serde_json::Map::new()));
-        set_nested(
-            &mut perm_root,
-            &["permission", "skill", name],
-            Value::String(String::from("allow")),
-        )?;
-        write_json(&perm_path, &perm_root)?;
-    }
+    let perm_path = permission_path(root);
+    let mut perm_root =
+        read_json(&perm_path)?.unwrap_or_else(|| Value::Object(serde_json::Map::new()));
+    set_nested(
+        &mut perm_root,
+        &["permission", "skill", name],
+        Value::String(String::from("allow")),
+    )?;
+    write_json(&perm_path, &perm_root)?;
     Ok(Registered {
-        app: app.name().into(),
+        app: String::from(APP),
         path: skill_path.display().to_string(),
         version: env!("CARGO_PKG_VERSION").into(),
     })
 }
 
-/// Deregister: remove `SKILL.md` (+ dir if empty) and the allow key (apps that
-/// have one). `NotFound` if the skill file is absent. `name` is the skill name
-/// / install tag (adr/027). `root` is the XDG root; `home` is the user home
-/// dir.
-pub fn deregister(
-    app: App,
-    root: &Path,
-    home: &Path,
-    name: &str,
-) -> Result<Deregistered, CarpenterError> {
-    let skill_path = app.skill_path(root, home, name);
+/// Deregister: remove `SKILL.md` (+ dir if empty) and the allow key.
+/// `NotFound` if the skill file is absent. `name` is the skill name
+/// / install tag (adr/027). `root` is the XDG root.
+pub fn deregister(root: &Path, name: &str) -> Result<Deregistered, CarpenterError> {
+    let skill_path = skill_path(root, name);
     if !skill_path.exists() {
-        return Err(CarpenterError::NotFound(format!(
-            "skill for app {}",
-            app.name()
-        )));
+        return Err(CarpenterError::NotFound(format!("skill for app {APP}")));
     }
     std::fs::remove_file(&skill_path).map_err(store::io_to_store)?;
     if let Some(dir) = skill_path.parent() {
@@ -298,21 +240,20 @@ pub fn deregister(
             let _ = std::fs::remove_dir(dir);
         }
     }
-    if let Some(perm_path) = app.permission_path(root) {
-        if let Some(mut perm_root) = read_json(&perm_path)? {
-            if let Some(skill) = perm_root
-                .get_mut("permission")
-                .and_then(|p| p.get_mut("skill"))
-            {
-                if let Some(obj) = skill.as_object_mut() {
-                    obj.remove(name);
-                }
+    let perm_path = permission_path(root);
+    if let Some(mut perm_root) = read_json(&perm_path)? {
+        if let Some(skill) = perm_root
+            .get_mut("permission")
+            .and_then(|p| p.get_mut("skill"))
+        {
+            if let Some(obj) = skill.as_object_mut() {
+                obj.remove(name);
             }
-            let _ = write_json(&perm_path, &perm_root);
         }
+        let _ = write_json(&perm_path, &perm_root);
     }
     Ok(Deregistered {
-        app: app.name().into(),
+        app: String::from(APP),
         path: skill_path.display().to_string(),
     })
 }
@@ -436,22 +377,19 @@ mod tests {
 
     static SEQ: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
 
-    fn anchors() -> (PathBuf, PathBuf) {
+    fn anchors() -> PathBuf {
         let n = SEQ.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         let base = std::env::temp_dir().join(format!("carpenter-skill-{}-{n}", std::process::id()));
         let _ = std::fs::remove_dir_all(&base);
         let xdg = base.join("xdg");
-        let home = base.join("home");
         std::fs::create_dir_all(&xdg).unwrap();
-        std::fs::create_dir_all(&home).unwrap();
-        (xdg, home)
+        xdg
     }
 
     #[test]
     fn register_writes_skill_and_merges_permission() {
-        let (d, home) = anchors();
-        let Registered { app, path, version } =
-            register(App::Opencode, &d, &home, NAME).expect("register");
+        let d = anchors();
+        let Registered { app, path, version } = register(&d, NAME).expect("register");
         assert_eq!(app, "opencode");
         assert!(
             path.ends_with("opencode/skills/carpenter/SKILL.md"),
@@ -465,38 +403,18 @@ mod tests {
         .unwrap();
         assert_eq!(perm["permission"]["skill"]["carpenter"], "allow");
         // re-register is idempotent (no error, no duplicate)
-        register(App::Opencode, &d, &home, NAME).expect("idempotent");
+        register(&d, NAME).expect("idempotent");
         let perm2: Value = serde_json::from_str(
             &std::fs::read_to_string(d.join("opencode/opencode.json")).unwrap(),
         )
         .unwrap();
         assert_eq!(perm2["permission"]["skill"]["carpenter"], "allow");
         let _ = std::fs::remove_dir_all(&d);
-        let _ = std::fs::remove_dir_all(&home);
-    }
-
-    #[test]
-    fn register_claude_code_writes_skill_without_permission_store() {
-        let (d, home) = anchors();
-        let Registered { app, path, .. } =
-            register(App::ClaudeCode, &d, &home, NAME).expect("register");
-        assert_eq!(app, "claude-code");
-        assert!(
-            path.ends_with(".claude/skills/carpenter/SKILL.md"),
-            "{path}"
-        );
-        assert!(home.join(".claude/skills/carpenter/SKILL.md").exists());
-        // claude code auto-discovers skills — nothing is written under the XDG root
-        assert!(!d.join("opencode").exists() && !d.join("opencode.json").exists());
-        deregister(App::ClaudeCode, &d, &home, NAME).expect("deregister");
-        assert!(!home.join(".claude/skills/carpenter").exists());
-        let _ = std::fs::remove_dir_all(&d);
-        let _ = std::fs::remove_dir_all(&home);
     }
 
     #[test]
     fn register_preserves_other_permission_keys() {
-        let (d, home) = anchors();
+        let d = anchors();
         let perm_path = d.join("opencode/opencode.json");
         std::fs::create_dir_all(perm_path.parent().unwrap()).unwrap();
         std::fs::write(
@@ -504,7 +422,7 @@ mod tests {
             br#"{"permission":{"skill":{"other-tool":"allow"},"bash":{"*":"allow"}},"theme":"dark"}"#,
         )
         .unwrap();
-        register(App::Opencode, &d, &home, NAME).expect("register");
+        register(&d, NAME).expect("register");
         let perm: Value =
             serde_json::from_str(&std::fs::read_to_string(&perm_path).unwrap()).unwrap();
         assert_eq!(perm["permission"]["skill"]["carpenter"], "allow");
@@ -512,15 +430,13 @@ mod tests {
         assert_eq!(perm["permission"]["bash"]["*"], "allow"); // preserved
         assert_eq!(perm["theme"], "dark"); // preserved
         let _ = std::fs::remove_dir_all(&d);
-        let _ = std::fs::remove_dir_all(&home);
     }
 
     #[test]
     fn deregister_removes_skill_and_key_then_not_found() {
-        let (d, home) = anchors();
-        register(App::Opencode, &d, &home, NAME).expect("register");
-        let Deregistered { app, path } =
-            deregister(App::Opencode, &d, &home, NAME).expect("deregister");
+        let d = anchors();
+        register(&d, NAME).expect("register");
+        let Deregistered { app, path } = deregister(&d, NAME).expect("deregister");
         assert_eq!(app, "opencode");
         assert!(path.ends_with("opencode/skills/carpenter/SKILL.md"));
         assert!(!d.join("opencode/skills/carpenter/SKILL.md").exists());
@@ -534,17 +450,16 @@ mod tests {
         .unwrap();
         assert!(perm["permission"]["skill"].get("carpenter").is_none());
         // second deregister is NotFound
-        let err = deregister(App::Opencode, &d, &home, NAME).unwrap_err();
+        let err = deregister(&d, NAME).unwrap_err();
         assert!(matches!(err, CarpenterError::NotFound(_)));
         let _ = std::fs::remove_dir_all(&d);
-        let _ = std::fs::remove_dir_all(&home);
     }
 
     #[test]
     fn register_branch_name_tags_dir_and_permission() {
-        let (d, home) = anchors();
+        let d = anchors();
         let name = "carpenter-ivan-topic";
-        let Registered { path, .. } = register(App::Opencode, &d, &home, name).expect("register");
+        let Registered { path, .. } = register(&d, name).expect("register");
         assert!(
             path.ends_with("opencode/skills/carpenter-ivan-topic/SKILL.md"),
             "{path}"
@@ -557,18 +472,17 @@ mod tests {
         )
         .unwrap();
         assert_eq!(perm["permission"]["skill"]["carpenter-ivan-topic"], "allow");
-        deregister(App::Opencode, &d, &home, name).expect("deregister");
+        deregister(&d, name).expect("deregister");
         assert!(!d.join("opencode/skills/carpenter-ivan-topic").exists());
         assert!(perm_has_no_key(&d, name), "tagged key must be removed");
         let _ = std::fs::remove_dir_all(&d);
-        let _ = std::fs::remove_dir_all(&home);
     }
 
     #[test]
     fn branch_skills_coexist_with_stock_skill() {
-        let (d, home) = anchors();
-        register(App::Opencode, &d, &home, NAME).expect("stock register");
-        register(App::Opencode, &d, &home, "carpenter-ivan-topic").expect("branch register");
+        let d = anchors();
+        register(&d, NAME).expect("stock register");
+        register(&d, "carpenter-ivan-topic").expect("branch register");
         assert!(d.join("opencode/skills/carpenter/SKILL.md").exists());
         assert!(d
             .join("opencode/skills/carpenter-ivan-topic/SKILL.md")
@@ -580,7 +494,6 @@ mod tests {
         assert_eq!(perm["permission"]["skill"]["carpenter"], "allow");
         assert_eq!(perm["permission"]["skill"]["carpenter-ivan-topic"], "allow");
         let _ = std::fs::remove_dir_all(&d);
-        let _ = std::fs::remove_dir_all(&home);
     }
 
     #[test]
@@ -593,13 +506,12 @@ mod tests {
 
     #[test]
     fn register_rejects_invalid_skill_name() {
-        let (d, home) = anchors();
-        let err = register(App::Opencode, &d, &home, "bad_name").unwrap_err();
+        let d = anchors();
+        let err = register(&d, "bad_name").unwrap_err();
         assert!(matches!(err, CarpenterError::ValidationError(_)), "{err:?}");
         // nothing was written
         assert!(!d.join("opencode").exists());
         let _ = std::fs::remove_dir_all(&d);
-        let _ = std::fs::remove_dir_all(&home);
     }
 
     fn perm_has_no_key(d: &Path, key: &str) -> bool {
@@ -609,13 +521,5 @@ mod tests {
         .unwrap()["permission"]["skill"]
             .get(key)
             .is_none()
-    }
-
-    #[test]
-    fn app_parse_branches() {
-        assert_eq!(App::parse("opencode").unwrap(), App::Opencode);
-        assert_eq!(App::parse("claude-code").unwrap(), App::ClaudeCode);
-        assert!(App::parse("agents").is_err());
-        assert!(App::parse("nope").is_err());
     }
 }

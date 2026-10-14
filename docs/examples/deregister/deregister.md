@@ -1,7 +1,7 @@
 **example:**
 
 ```sh
-carpenter self deregister --app opencode --yes
+carpenter self deregister --yes
 ```
 
 Result (one envelope on stdout):
@@ -10,6 +10,6 @@ Result (one envelope on stdout):
 ```
 
 Removes `SKILL.md` (+ dir if empty) and the allow key. NotFound if absent.
-Without `--yes` a plan (the machine-global skill path the app reads) is
+Without `--yes` a plan (the machine-global skill path opencode reads) is
 printed to stderr and confirmed on stdin — decline or EOF ⇒ `Conflict`,
 nothing removed.

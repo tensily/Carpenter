@@ -11,8 +11,8 @@ set -eu
 a=$(tagged_bin skill_a) # tag carpenter-skill-a
 b=$(tagged_bin skill_b) # tag carpenter-skill-b
 
-must_ok register-a "$a" self register --app opencode
-must_ok register-b "$b" self register --app opencode
+must_ok register-a "$a" self register
+must_ok register-b "$b" self register
 skills="$(config_root)/opencode/skills"
 [ -f "$skills/carpenter-skill-a/SKILL.md" ] || fail "skill a missing"
 [ -f "$skills/carpenter-skill-b/SKILL.md" ] || fail "skill b missing"
@@ -25,7 +25,7 @@ must_ok remove-a "$a" self remove carpenter-skill-a --bin-dir "$SHOME/bin" --yes
 # recovery: removal deleted the binary too — reinstall the copy, then
 # register restores skill + permission key (adr/019 recovery path)
 cp "$CARPENTER" "$SHOME/bin/carpenter_skill_a"
-must_ok restore-a "$a" self register --app opencode
+must_ok restore-a "$a" self register
 [ -f "$skills/carpenter-skill-a/SKILL.md" ] || fail "skill a not restorable via register"
 
 mkdir -p "$(config_root)/carpenter-stale"

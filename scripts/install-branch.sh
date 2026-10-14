@@ -48,11 +48,7 @@ BIN_DIR="${HOME}/.local/bin"
 BIN="${BIN_DIR}/${BIN_NAME}"
 
 detect_apps() {
-    for app in opencode claude-code; do
-        bin=$app
-        [ "$app" = "claude-code" ] && bin=claude
-        command -v "$bin" >/dev/null 2>&1 && printf '%s\n' "$app"
-    done
+    command -v opencode >/dev/null 2>&1 && printf '%s\n' opencode
 }
 
 if [ "$UNINSTALL" = yes ]; then
@@ -113,16 +109,13 @@ data_dir="${XDG_CONFIG_HOME:-${HOME}/.config}/$TAG"
 
 apps=$(detect_apps)
 if [ -n "$apps" ]; then
-    # shellcheck disable=SC2086  # apps is a deliberate word list
-    for app in $apps; do
-        if "$BIN" self register --app "$app" >/dev/null 2>&1; then
-            say "registered skill $BIN_NAME in $app"
-        else
-            say "note: register failed for $app; run manually: $BIN self register --app $app"
-        fi
-    done
+    if "$BIN" self register >/dev/null 2>&1; then
+        say "registered skill $BIN_NAME in $apps"
+    else
+        say "note: register failed; run manually: $BIN self register"
+    fi
 else
-    say "no agent app detected (later: $BIN self register --app opencode|claude-code)"
+    say "no agent app detected (later: $BIN self register)"
 fi
 
 say "installed $BIN"
