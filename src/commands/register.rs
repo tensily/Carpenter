@@ -8,15 +8,22 @@ use crate::core::skill::{self, App};
 use crate::core::store::Paths;
 use crate::models::Data;
 
-/// `register [--app opencode] [--print-skill]`.
-pub fn register(paths: &Paths, app: &str, print_skill: bool) -> Result<Data, CarpenterError> {
+/// `register [--app opencode] [--print-skill]`. `name` is the skill name /
+/// install tag (adr/027) — the caller resolves it via
+/// [`store::install_name`](crate::core::store::install_name).
+pub fn register(
+    paths: &Paths,
+    app: &str,
+    print_skill: bool,
+    name: &str,
+) -> Result<Data, CarpenterError> {
     let app = App::parse(app)?;
     if print_skill {
         return Ok(Data::PrintSkill {
-            skill: skill::render()?,
+            skill: skill::render(name)?,
         });
     }
-    let r = skill::register(app, paths.xdg_root()?, paths.home_dir()?)?;
+    let r = skill::register(app, paths.xdg_root()?, paths.home_dir()?, name)?;
     Ok(Data::Register {
         app: r.app,
         path: r.path,
@@ -38,7 +45,7 @@ mod tests {
             path,
             version,
             installed,
-        } = register(&paths, "opencode", false).expect("register")
+        } = register(&paths, "opencode", false, "carpenter").expect("register")
         else {
             panic!("Register");
         };
@@ -60,7 +67,9 @@ mod tests {
     #[test]
     fn register_print_skill_has_no_fs_effect() {
         let paths = testutil::meta_setup();
-        let Data::PrintSkill { skill } = register(&paths, "opencode", true).expect("print") else {
+        let Data::PrintSkill { skill } =
+            register(&paths, "opencode", true, "carpenter").expect("print")
+        else {
             panic!("PrintSkill");
         };
         assert!(skill.starts_with("---\nname: carpenter\n"));
@@ -75,9 +84,24 @@ mod tests {
     }
 
     #[test]
+    fn register_passes_the_install_name_through() {
+        let paths = testutil::meta_setup();
+        let Data::Register { path, .. } =
+            register(&paths, "opencode", false, "carpenter-ivan-topic").expect("register")
+        else {
+            panic!("Register");
+        };
+        assert!(
+            path.ends_with("opencode/skills/carpenter-ivan-topic/SKILL.md"),
+            "{path}"
+        );
+        let _ = std::fs::remove_dir_all(paths.root);
+    }
+
+    #[test]
     fn register_rejects_unsupported_app() {
         let paths = testutil::meta_setup();
-        let err = register(&paths, "agents", false).unwrap_err();
+        let err = register(&paths, "agents", false, "carpenter").unwrap_err();
         assert!(matches!(err, CarpenterError::ValidationError(_)));
         let _ = std::fs::remove_dir_all(paths.root);
     }
@@ -90,7 +114,7 @@ mod tests {
             path,
             installed,
             ..
-        } = register(&paths, "claude-code", false).expect("register")
+        } = register(&paths, "claude-code", false, "carpenter").expect("register")
         else {
             panic!("Register");
         };

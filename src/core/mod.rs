@@ -4,10 +4,12 @@
 pub mod bugfile;
 pub mod compare;
 pub mod config;
+pub mod confirm;
 pub mod db;
 pub mod error;
 pub mod exec;
 pub mod helper;
+pub mod installs;
 pub mod notebook;
 pub mod output;
 pub mod release;

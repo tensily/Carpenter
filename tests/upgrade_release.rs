@@ -31,7 +31,8 @@ fn upgrade_release_mode_installs_and_refreshes_registered_skill() {
     };
     let bin_dir = paths.root.join("bin");
     // registered apps get refreshed; nothing is registered by surprise
-    carpenter::commands::register::register(&paths, "opencode", false).expect("pre-register");
+    carpenter::commands::register::register(&paths, "opencode", false, "carpenter")
+        .expect("pre-register");
 
     let Data::Upgrade {
         upgraded,
@@ -45,6 +46,7 @@ fn upgrade_release_mode_installs_and_refreshes_registered_skill() {
         Some(bin_dir.to_str().unwrap()),
         false,
         "stable",
+        "carpenter",
     )
     .expect("upgrade")
     else {
@@ -81,6 +83,7 @@ fn upgrade_release_mode_installs_and_refreshes_registered_skill() {
         Some(bin_dir.to_str().unwrap()),
         true,
         "stable",
+        "carpenter",
     )
     .expect("upgrade again") else {
         panic!("Upgrade");

@@ -1,7 +1,7 @@
 **example:**
 
 ```sh
-carpenter register --app opencode
+carpenter self register --app opencode
 ```
 
 Result (one envelope on stdout):

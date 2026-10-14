@@ -47,73 +47,12 @@ pub fn cli() -> Command {
         .subcommand(bug_group())
         .subcommand(feature_group())
         .subcommand(config_group())
-        .subcommand(register_subcommand())
-        .subcommand(deregister_subcommand())
         .subcommand(
             Command::new("build")
                 .about("Scaffold a course at a path (course.json + course.db + lessons/).")
                 .arg(positional("path", "Target directory.")),
         )
-        .subcommand(
-            Command::new("install")
-                .about("Place the carpenter binary into a bin dir.")
-                .arg(
-                    Arg::new("bin-dir")
-                        .long("bin-dir")
-                        .value_name("PATH")
-                        .help("Bin dir (default: config bin_dir → ~/.local/bin)."),
-                ),
-        )
-        .subcommand(
-            Command::new("upgrade")
-                .about("Replace the installed binary from a published release (or a source checkout) and refresh the skill.")
-                .arg(
-                    Arg::new("channel")
-                        .long("channel")
-                        .value_name("CHANNEL")
-                        .default_value("stable")
-                        .help("Release channel to fetch (stable|nightly)."),
-                )
-                .arg(
-                    Arg::new("source")
-                        .long("source")
-                        .value_name("PATH")
-                        .help("Source checkout (default: config source_dir)."),
-                )
-                .arg(
-                    Arg::new("bin-dir")
-                        .long("bin-dir")
-                        .value_name("PATH")
-                        .help("Install target (default: config bin_dir)."),
-                )
-                .arg(
-                    Arg::new("no-skill")
-                        .long("no-skill")
-                        .action(ArgAction::SetTrue)
-                        .help("Skip the skill auto-refresh (skill:null)."),
-                ),
-        )
-        .subcommand(
-            Command::new("uninstall")
-                .about("Remove the carpenter skill, the installed binary, and (with --purge-config) the config.")
-                .arg(
-                    Arg::new("bin-dir")
-                        .long("bin-dir")
-                        .value_name("PATH")
-                        .help("Bin dir (default: config bin_dir → ~/.local/bin)."),
-                )
-                .arg(
-                    Arg::new("purge-config")
-                        .long("purge-config")
-                        .action(ArgAction::SetTrue)
-                        .help("Also remove the carpenter config file."),
-                ),
-        )
-        .subcommand(
-            Command::new("link")
-                .about("Link manifest commands (future CLI registry).")
-                .subcommand(Command::new("register").about("Emit the carpenter link manifest.")),
-        );
+        .subcommand(self_group());
     // `--capture-example <PATH>` exists only in a `--features dev` build
     // (adr/016). gen-howto runs against a non-dev build of carpenter, so this
     // arg — and thus the whole dev authoring surface — is invisible to the
@@ -447,6 +386,13 @@ fn force_arg() -> Arg {
         .help("Confirm the destructive operation.")
 }
 
+fn yes_arg() -> Arg {
+    Arg::new("yes")
+        .long("yes")
+        .action(ArgAction::SetTrue)
+        .help("Skip the confirmation prompt (non-interactive removal).")
+}
+
 fn progress_group() -> Command {
     Command::new("progress")
         .about("Progress commands.")
@@ -549,31 +495,128 @@ fn config_group() -> Command {
         )
 }
 
-fn register_subcommand() -> Command {
-    Command::new("register")
-        .about("Register the carpenter skill with an agent app (writes SKILL.md; opencode also gets a permission entry).")
-        .arg(
-            Arg::new("app")
-                .long("app")
-                .default_value("opencode")
-                .help("Agent app (opencode|claude-code)."),
+fn self_group() -> Command {
+    Command::new("self")
+        .about("Install, update, register, and remove carpenter installs (the tool itself).")
+        .subcommand(
+            Command::new("install")
+                .about("Place the carpenter binary into a bin dir.")
+                .arg(
+                    Arg::new("bin-dir")
+                        .long("bin-dir")
+                        .value_name("PATH")
+                        .help("Bin dir (default: config bin_dir -> ~/.local/bin)."),
+                ),
         )
-        .arg(
-            Arg::new("print-skill")
-                .long("print-skill")
-                .action(ArgAction::SetTrue)
-                .help("Print the rendered SKILL.md to stdout instead of writing."),
+        .subcommand(
+            Command::new("upgrade")
+                .about("Replace the installed binary from a published release (or a source checkout) and refresh the skill.")
+                .arg(
+                    Arg::new("channel")
+                        .long("channel")
+                        .value_name("CHANNEL")
+                        .default_value("stable")
+                        .help("Release channel to fetch (stable|nightly)."),
+                )
+                .arg(
+                    Arg::new("source")
+                        .long("source")
+                        .value_name("PATH")
+                        .help("Source checkout (default: config source_dir)."),
+                )
+                .arg(
+                    Arg::new("bin-dir")
+                        .long("bin-dir")
+                        .value_name("PATH")
+                        .help("Install target (default: config bin_dir)."),
+                )
+                .arg(
+                    Arg::new("no-skill")
+                        .long("no-skill")
+                        .action(ArgAction::SetTrue)
+                        .help("Skip the skill auto-refresh (skill:null)."),
+                ),
         )
-}
-
-fn deregister_subcommand() -> Command {
-    Command::new("deregister")
-        .about("Deregister the carpenter skill (removes SKILL.md; opencode also loses its permission entry).")
-        .arg(
-            Arg::new("app")
-                .long("app")
-                .default_value("opencode")
-                .help("Agent app (opencode|claude-code)."),
+        .subcommand(
+            Command::new("uninstall")
+                .about("Remove the carpenter skill, the installed binary, and (with --purge-config) the config. Prints a removal plan and asks for confirmation; --yes skips.")
+                .arg(
+                    Arg::new("bin-dir")
+                        .long("bin-dir")
+                        .value_name("PATH")
+                        .help("Bin dir (default: config bin_dir -> ~/.local/bin)."),
+                )
+                .arg(
+                    Arg::new("purge-config")
+                        .long("purge-config")
+                        .action(ArgAction::SetTrue)
+                        .help("Also remove the carpenter config file."),
+                )
+                .arg(yes_arg()),
+        )
+        .subcommand(
+            Command::new("register")
+                .about("Register the carpenter skill with an agent app (writes SKILL.md; opencode also gets a permission entry).")
+                .arg(
+                    Arg::new("app")
+                        .long("app")
+                        .default_value("opencode")
+                        .help("Agent app (opencode|claude-code)."),
+                )
+                .arg(
+                    Arg::new("print-skill")
+                        .long("print-skill")
+                        .action(ArgAction::SetTrue)
+                        .help("Print the rendered SKILL.md to stdout instead of writing."),
+                ),
+        )
+        .subcommand(
+            Command::new("deregister")
+                .about("Deregister the carpenter skill (removes SKILL.md; opencode also loses its permission entry). Prints a plan and asks for confirmation; --yes skips.")
+                .arg(
+                    Arg::new("app")
+                        .long("app")
+                        .default_value("opencode")
+                        .help("Agent app (opencode|claude-code)."),
+                )
+                .arg(yes_arg()),
+        )
+        .subcommand(
+            Command::new("list")
+                .about("List carpenter installs on this machine (binaries, skills, data dirs).")
+                .arg(
+                    Arg::new("bin-dir")
+                        .long("bin-dir")
+                        .value_name("PATH")
+                        .help("Bin dir (default: config bin_dir -> ~/.local/bin)."),
+                ),
+        )
+        .subcommand(
+            Command::new("remove")
+                .about("Uninstall any carpenter install by tag (skill + binary + config purge). Prints a removal plan and asks for confirmation; --yes skips.")
+                .arg(
+                    Arg::new("tag")
+                        .value_name("TAG")
+                        .required(true)
+                        .help("Install tag: the binary stem (carpenter, carpenter-<branch>)."),
+                )
+                .arg(
+                    Arg::new("bin-dir")
+                        .long("bin-dir")
+                        .value_name("PATH")
+                        .help("Bin dir (default: config bin_dir -> ~/.local/bin)."),
+                )
+                .arg(
+                    Arg::new("purge-config")
+                        .long("purge-config")
+                        .action(ArgAction::SetTrue)
+                        .help("Also remove the target install's config file."),
+                )
+                .arg(yes_arg()),
+        )
+        .subcommand(
+            Command::new("link")
+                .about("Emit the future CLI registry manifest."),
         )
 }
 
@@ -685,31 +728,8 @@ fn dispatch(paths: &Paths, matches: &ArgMatches) -> Result<Data, core::error::Ca
         Some(("bug", sub)) => bug_cmd(paths, sub),
         Some(("feature", sub)) => feature_cmd(paths, sub),
         Some(("config", sub)) => config_cmd(paths, sub),
-        Some(("register", m)) => register_cmd(paths, m),
-        Some(("deregister", m)) => deregister_cmd(paths, m),
         Some(("build", m)) => commands::build::build(paths, &arg_string(m, "path")),
-        Some(("install", m)) => {
-            let bin_dir = m.get_one::<String>("bin-dir").map(|s| s.as_str());
-            commands::install::install(paths, bin_dir)
-        }
-        Some(("upgrade", m)) => {
-            let source = m.get_one::<String>("source").map(|s| s.as_str());
-            let bin_dir = m.get_one::<String>("bin-dir").map(|s| s.as_str());
-            commands::upgrade::upgrade(
-                paths,
-                source,
-                bin_dir,
-                m.get_flag("no-skill"),
-                m.get_one::<String>("channel")
-                    .map(|s| s.as_str())
-                    .unwrap_or("stable"),
-            )
-        }
-        Some(("uninstall", m)) => {
-            let bin_dir = m.get_one::<String>("bin-dir").map(|s| s.as_str());
-            commands::uninstall::uninstall(paths, bin_dir, m.get_flag("purge-config"))
-        }
-        Some(("link", sub)) => link_cmd(paths, sub),
+        Some(("self", sub)) => self_cmd(paths, sub),
         #[cfg(feature = "dev")]
         Some(("dev", sub)) => dev_cmd(sub),
         _ => Err(core::error::CarpenterError::ValidationError(
@@ -1076,19 +1096,52 @@ fn config_cmd(paths: &Paths, sub: &ArgMatches) -> Result<Data, core::error::Carp
     }
 }
 
-fn register_cmd(paths: &Paths, m: &ArgMatches) -> Result<Data, core::error::CarpenterError> {
-    commands::register::register(paths, &arg_string(m, "app"), m.get_flag("print-skill"))
-}
-
-fn deregister_cmd(paths: &Paths, m: &ArgMatches) -> Result<Data, core::error::CarpenterError> {
-    commands::deregister::deregister(paths, &arg_string(m, "app"))
-}
-
-fn link_cmd(paths: &Paths, sub: &ArgMatches) -> Result<Data, core::error::CarpenterError> {
+fn self_cmd(paths: &Paths, sub: &ArgMatches) -> Result<Data, core::error::CarpenterError> {
+    fn bin_dir(m: &ArgMatches) -> Option<&str> {
+        m.get_one::<String>("bin-dir").map(|s| s.as_str())
+    }
     match sub.subcommand() {
-        Some(("register", _)) => commands::link::register(paths),
+        Some(("install", m)) => commands::install::install(paths, bin_dir(m)),
+        Some(("upgrade", m)) => commands::upgrade::upgrade(
+            paths,
+            m.get_one::<String>("source").map(|s| s.as_str()),
+            bin_dir(m),
+            m.get_flag("no-skill"),
+            m.get_one::<String>("channel")
+                .map(|s| s.as_str())
+                .unwrap_or("stable"),
+            &core::store::install_name(),
+        ),
+        Some(("uninstall", m)) => commands::uninstall::uninstall(
+            paths,
+            bin_dir(m),
+            m.get_flag("purge-config"),
+            m.get_flag("yes"),
+            &core::store::install_name(),
+        ),
+        Some(("register", m)) => commands::register::register(
+            paths,
+            &arg_string(m, "app"),
+            m.get_flag("print-skill"),
+            &core::store::install_name(),
+        ),
+        Some(("deregister", m)) => commands::deregister::deregister(
+            paths,
+            &arg_string(m, "app"),
+            m.get_flag("yes"),
+            &core::store::install_name(),
+        ),
+        Some(("list", m)) => commands::installs::list(paths, bin_dir(m)),
+        Some(("remove", m)) => commands::installs::remove(
+            paths,
+            &arg_string(m, "tag"),
+            bin_dir(m),
+            m.get_flag("purge-config"),
+            m.get_flag("yes"),
+        ),
+        Some(("link", _)) => commands::link::register(paths),
         _ => Err(core::error::CarpenterError::ValidationError(format!(
-            "unknown link subcommand: {:?}",
+            "unknown self subcommand: {:?}",
             sub.subcommand_name().unwrap_or("(none)")
         ))),
     }
@@ -1117,25 +1170,8 @@ fn cli_has_all_top_level_subcommands() {
     let tree = cli();
     let names: Vec<&str> = tree.get_subcommands().map(|c| c.get_name()).collect();
     for expected in [
-        "howto",
-        "course",
-        "plan",
-        "goal",
-        "lesson",
-        "quiz",
-        "venv",
-        "skip",
-        "progress",
-        "notes",
-        "bug",
-        "feature",
-        "config",
-        "register",
-        "deregister",
-        "build",
-        "install",
-        "upgrade",
-        "link",
+        "howto", "course", "plan", "goal", "lesson", "quiz", "venv", "skip", "progress", "notes",
+        "bug", "feature", "config", "build", "self",
     ] {
         assert!(names.contains(&expected), "missing {expected}: {names:?}");
     }

@@ -52,15 +52,30 @@ checksum, binary destination, which agent apps it would register the skill
 into — and asks `proceed? [Y/n]` before downloading anything (Enter proceeds;
 piped/CI runs proceed without hanging). Decline with `n` and nothing is
 touched. The binary lands in `~/.local/bin` (add it to `PATH` if the installer
-says so). Update later with `carpenter upgrade` (it also refreshes the skill).
+says so). Update later with `carpenter self upgrade` (it also refreshes the skill).
 
 If `opencode` or `claude` is on your machine, the installer asks whether to
 register the carpenter skill (each app, one by one; Enter registers); you can
 also register manually:
 
 ```sh
-carpenter register --app opencode      # or: claude-code
+carpenter self register --app opencode  # or: claude-code
 ```
+
+### Command names per install
+
+Only the stable release installs as `carpenter`. Every other install carries
+its identity in the command name (adr/027) — `self` subcommands work on each:
+
+| install | command | skill / data dir |
+|---|---|---|
+| stable (main) | `carpenter` | `carpenter` |
+| nightly | `carpenter_nightly` | `carpenter-nightly` |
+| branch `ivan/topic` | `carpenter_ivan_topic` | `carpenter-ivan-topic` |
+
+Each install is fully isolated (own data dir, skill, and permission key); see
+`carpenter self list` and `carpenter self remove <tag>`. Dev-facing details:
+[docs/README.md](docs/README.md).
 
 ## Contributing
 

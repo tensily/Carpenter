@@ -41,16 +41,26 @@ fn run(cmd: &mut Command) -> (bool, Value) {
     (out.status.success(), env)
 }
 
-/// Write a config file so the keep/purge assertions are meaningful.
+/// Write a config file so the keep/purge assertions are meaningful. Writes the
+/// stock path; tests that purge also cover the tagged identity path when their
+/// installed copy runs under a non-stock name.
 fn write_config(root: &Path) {
     let cfg = config_file(root);
     std::fs::create_dir_all(cfg.parent().unwrap()).unwrap();
     std::fs::write(&cfg, br#"{"bin_dir":"/nonexistent-default"}"#).unwrap();
 }
 
+/// The config file for the tagged identity (`carpenter_nightly` runs as
+/// `carpenter-nightly`, adr/027).
+fn tagged_config_file(root: &Path) -> std::path::PathBuf {
+    common::config_root(root)
+        .join("carpenter-nightly")
+        .join("config.json")
+}
+
 /// Install a copy of the real binary into `<root>/bin/carpenter`.
 fn install_copy(root: &Path) -> std::path::PathBuf {
-    let bin = root.join("bin").join("carpenter");
+    let bin = root.join("bin").join("carpenter_nightly");
     std::fs::create_dir_all(bin.parent().unwrap()).unwrap();
     std::fs::copy(carpenter_bin(), &bin).unwrap();
     bin
@@ -61,8 +71,8 @@ fn opencode_has_carpenter_key(perms: &Path) -> bool {
     let v: Value = serde_json::from_str(&text).unwrap_or(Value::Null);
     v.get("permission")
         .and_then(|p| p.get("skill"))
-        .and_then(|s| s.get("carpenter"))
-        .is_some()
+        .map(|s| s.get("carpenter").is_some() || s.get("carpenter-nightly").is_some())
+        .unwrap_or(false)
 }
 
 #[test]
@@ -74,6 +84,7 @@ fn uninstall_self_deletes_running_binary() {
 
     // register via the installed copy (skill + permission land in the sandbox)
     let (ok, env) = run(sandboxed(&bin, &root)
+        .arg("self")
         .arg("register")
         .arg("--app")
         .arg("opencode"));
@@ -83,7 +94,9 @@ fn uninstall_self_deletes_running_binary() {
 
     // uninstall FROM the installed copy — the self-delete path
     let (ok, env) = run(sandboxed(&bin, &root)
+        .arg("self")
         .arg("uninstall")
+        .arg("--yes")
         .arg("--bin-dir")
         .arg(bin.parent().unwrap()));
     assert!(ok, "{env}");
@@ -116,7 +129,9 @@ fn uninstall_twice_is_notfound() {
     let bin_dir = bin.parent().unwrap().to_path_buf();
 
     let (ok, _) = run(sandboxed(&bin, &root)
+        .arg("self")
         .arg("uninstall")
+        .arg("--yes")
         .arg("--bin-dir")
         .arg(&bin_dir));
     assert!(ok);
@@ -124,7 +139,9 @@ fn uninstall_twice_is_notfound() {
     // second run (from the still-existing test binary): no skill, no binary →
     // error envelope, exit 1
     let (ok, env) = run(sandboxed(Path::new(carpenter_bin()), &root)
+        .arg("self")
         .arg("uninstall")
+        .arg("--yes")
         .arg("--bin-dir")
         .arg(&bin_dir));
     assert!(!ok, "{env}");
@@ -139,16 +156,25 @@ fn uninstall_purges_config_with_flag() {
     let root = setup("uninstall-purge");
     let bin = install_copy(&root);
     write_config(&root);
+    let tagged_cfg = tagged_config_file(&root);
+    std::fs::create_dir_all(tagged_cfg.parent().unwrap()).unwrap();
+    std::fs::write(&tagged_cfg, br#"{"bin_dir":"/nonexistent-default"}"#).unwrap();
     let bin_dir = bin.parent().unwrap().to_path_buf();
 
     let (ok, env) = run(sandboxed(&bin, &root)
+        .arg("self")
         .arg("uninstall")
+        .arg("--yes")
         .arg("--bin-dir")
         .arg(&bin_dir)
         .arg("--purge-config"));
     assert!(ok, "{env}");
     assert_eq!(env["data"]["config_purged"], true, "{env}");
-    assert!(!config_file(&root).exists(), "config purged");
+    assert!(!tagged_cfg.exists(), "tagged config purged");
+    assert!(
+        config_file(&root).is_file(),
+        "the calling stock install's config survives (purge targets the removed tag only)"
+    );
 
     let _ = std::fs::remove_dir_all(&root);
 }
@@ -158,7 +184,10 @@ fn uninstall_notfound_with_default_bin_dir_when_nothing_installed() {
     // no --bin-dir: default resolves under the sandboxed HOME → nothing there
     let root = setup("uninstall-default");
 
-    let (ok, env) = run(sandboxed(Path::new(carpenter_bin()), &root).arg("uninstall"));
+    let (ok, env) = run(sandboxed(Path::new(carpenter_bin()), &root)
+        .arg("self")
+        .arg("uninstall")
+        .arg("--yes"));
     assert!(!ok, "{env}");
     assert_eq!(env["code"], "NotFound", "{env}");
 
@@ -215,7 +244,7 @@ fn install_sh_then_uninstall_reverses_footprint() {
         String::from_utf8_lossy(&out.stderr)
     );
 
-    let bin = bin_dir.join("carpenter");
+    let bin = bin_dir.join("carpenter_nightly");
     let (skill_md, perms) = opencode_paths(&root);
     assert!(
         bin.is_file(),
@@ -227,7 +256,9 @@ fn install_sh_then_uninstall_reverses_footprint() {
 
     // uninstall from the installed copy — reverses the installer footprint
     let (ok, env) = run(sandboxed(&bin, &root)
+        .arg("self")
         .arg("uninstall")
+        .arg("--yes")
         .arg("--bin-dir")
         .arg(&bin_dir));
     assert!(ok, "{env}");
@@ -290,11 +321,11 @@ fn install_sh_detects_and_registers_claude_code() {
         String::from_utf8_lossy(&out.stderr)
     );
 
-    let bin = bin_dir.join("carpenter");
+    let bin = bin_dir.join("carpenter_nightly");
     let skill_md = root
         .join(".claude")
         .join("skills")
-        .join("carpenter")
+        .join("carpenter-nightly")
         .join("SKILL.md");
     assert!(
         bin.is_file(),
@@ -309,7 +340,9 @@ fn install_sh_detects_and_registers_claude_code() {
 
     // uninstall from the installed copy — reverses the claude-code footprint
     let (ok, env) = run(sandboxed(&bin, &root)
+        .arg("self")
         .arg("uninstall")
+        .arg("--yes")
         .arg("--bin-dir")
         .arg(&bin_dir));
     assert!(ok, "{env}");
@@ -318,6 +351,147 @@ fn install_sh_detects_and_registers_claude_code() {
 
     let _ = std::fs::remove_dir_all(&root);
     let _ = std::fs::remove_dir_all(&fixture);
+}
+
+/// Without `--yes` and with no interactive stdin (`Command::output` closes it),
+/// the confirmation reads EOF and the removal aborts with a `Conflict`
+/// envelope — and nothing is removed (adr/019 revision).
+#[test]
+fn uninstall_without_yes_aborts_when_non_interactive() {
+    let root = setup("uninstall-noconfirm");
+    let bin = install_copy(&root);
+    let (skill_md, _) = opencode_paths(&root);
+    let (ok, env) = run(sandboxed(&bin, &root)
+        .arg("self")
+        .arg("register")
+        .arg("--app")
+        .arg("opencode"));
+    assert!(ok, "{env}");
+
+    let (ok, env) = run(sandboxed(&bin, &root)
+        .arg("self")
+        .arg("uninstall")
+        .arg("--bin-dir")
+        .arg(bin.parent().unwrap()));
+    assert!(!ok, "{env}");
+    assert_eq!(env["status"], "error", "{env}");
+    assert_eq!(env["code"], "Conflict", "{env}");
+    assert!(bin.exists(), "binary untouched without confirmation");
+    assert!(skill_md.exists(), "skill untouched without confirmation");
+
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// Same non-interactive abort for the `remove` and `deregister` surfaces —
+/// the whole destructive self-group shares the confirmation contract.
+#[test]
+fn remove_and_deregister_abort_without_yes_when_non_interactive() {
+    let root = setup("remove-noconfirm");
+    let bin = install_copy(&root);
+    let (skill_md, _) = opencode_paths(&root);
+    let (ok, env) = run(sandboxed(&bin, &root)
+        .arg("self")
+        .arg("register")
+        .arg("--app")
+        .arg("opencode"));
+    assert!(ok, "{env}");
+
+    let (ok, env) = run(sandboxed(&bin, &root)
+        .arg("self")
+        .arg("remove")
+        .arg("carpenter-nightly")
+        .arg("--bin-dir")
+        .arg(bin.parent().unwrap()));
+    assert!(!ok, "{env}");
+    assert_eq!(env["code"], "Conflict", "{env}");
+    assert!(bin.exists(), "binary untouched without confirmation");
+    assert!(skill_md.exists(), "skill untouched without confirmation");
+
+    let (ok, env) = run(sandboxed(&bin, &root)
+        .arg("self")
+        .arg("deregister")
+        .arg("--app")
+        .arg("opencode"));
+    assert!(!ok, "{env}");
+    assert_eq!(env["code"], "Conflict", "{env}");
+    assert!(skill_md.exists(), "skill untouched without confirmation");
+
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// A piped explicit `y` satisfies the confirmation — the interactive path,
+/// driven through stdin (`remove` variant).
+#[test]
+fn remove_accepts_piped_confirmation() {
+    use std::io::Write;
+    use std::process::Stdio;
+
+    let root = setup("remove-piped-yes");
+    let bin = install_copy(&root);
+    let (skill_md, _) = opencode_paths(&root);
+    let (ok, env) = run(sandboxed(&bin, &root)
+        .arg("self")
+        .arg("register")
+        .arg("--app")
+        .arg("opencode"));
+    assert!(ok, "{env}");
+
+    let mut child = sandboxed(&bin, &root)
+        .arg("self")
+        .arg("remove")
+        .arg("carpenter-nightly")
+        .arg("--bin-dir")
+        .arg(bin.parent().unwrap())
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    child.stdin.take().unwrap().write_all(b"y\n").unwrap();
+    let out = child.wait_with_output().unwrap();
+    assert!(
+        out.status.success(),
+        "{}{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let env: Value = serde_json::from_str(String::from_utf8_lossy(&out.stdout).trim()).unwrap();
+    assert_eq!(env["status"], "ok", "{env}");
+    assert_eq!(env["data"]["removed"], true, "{env}");
+    assert!(!bin.exists(), "binary removed after piped confirmation");
+    assert!(!skill_md.exists(), "skill removed after piped confirmation");
+
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// `--purge-config` on `self remove <tag>` purges the removed tag's config —
+/// never the calling install's (adr/019 revision).
+#[test]
+fn remove_purges_only_the_target_tags_config() {
+    let root = setup("remove-purge-target");
+    let bin = install_copy(&root);
+    let tagged_cfg = tagged_config_file(&root);
+    std::fs::create_dir_all(tagged_cfg.parent().unwrap()).unwrap();
+    std::fs::write(&tagged_cfg, br#"{"bin_dir":"/nonexistent-default"}"#).unwrap();
+    write_config(&root);
+
+    let (ok, env) = run(sandboxed(&bin, &root)
+        .arg("self")
+        .arg("remove")
+        .arg("carpenter-nightly")
+        .arg("--yes")
+        .arg("--bin-dir")
+        .arg(bin.parent().unwrap())
+        .arg("--purge-config"));
+    assert!(ok, "{env}");
+    assert_eq!(env["data"]["config_purged"], true, "{env}");
+    assert!(!tagged_cfg.exists(), "tagged config purged");
+    assert!(
+        config_file(&root).is_file(),
+        "the calling stock install's config survives"
+    );
+
+    let _ = std::fs::remove_dir_all(&root);
 }
 
 fn unix_chmod(path: &Path) {

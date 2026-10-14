@@ -1,15 +1,15 @@
-# `build` / `install` / `upgrade` / `uninstall` — output contracts
+# `build` / `self` (install · upgrade · uninstall · register · list · remove) — output contracts
 
 <!-- BEGIN GENERATED -->
 | cmd | input | `data` (ok) |
 |-----|-------|-------------|
 | `build <path>` | target dir | `{"path":"/courses/ds","slug":"ds","created":["course.json","course.db","lessons/"]}` — scaffolds course.json + course.db + lessons/ |
-| `install [--bin-dir <p>]` | — | `{"installed":true,"bin":"~/.local/bin/carpenter","on_path":true}` — `on_path` = whether `bin_dir` resolves on `$PATH` |
-| `upgrade [--channel stable|nightly] [--source <p>] [--bin-dir <p>] [--no-skill]` | no flag → latest **stable** release; `--channel nightly` → rolling prerelease; `--source` → config `source_dir` → local build | `{"upgraded":true,"version":"0.12.0","bin":"~/.local/bin/carpenter","source":"https://github.com/tensily/Carpenter/releases/latest/download/carpenter-x86_64-unknown-linux-musl.tar.gz","skill":[{"app":"opencode","path":"~/.config/opencode/skills/carpenter/SKILL.md","refreshed":true},{"app":"claude-code","path":"~/.claude/skills/carpenter/SKILL.md","refreshed":true}]}` — `skill` = per-app refresh outcomes (one per registered app): `[{"refreshed":true,"app":"opencode",…},{"refreshed":true,"app":"claude-code",…}]` · nothing registered ⇒ `{refreshed:false,reason:"not_registered",warning:"…"}` · `--no-skill` ⇒ `skill:null` |
-| `uninstall [--bin-dir <p>] [--purge-config]` | — | `{"uninstalled":true,"bin":"~/.local/bin/carpenter","skill":[{"app":"opencode","path":"~/.config/opencode/skills/carpenter/SKILL.md","removed":true},{"app":"claude-code","path":"~/.claude/skills/carpenter/SKILL.md","removed":true}],"config_purged":false}` — `skill` = per-app removal outcomes (one per registered app): `[{"removed":true,"app":"opencode",…},{"removed":true,"app":"claude-code",…}]` · nothing registered ⇒ `{removed:false,reason:"not_registered"}`; `bin:null` when no binary was present; `NotFound` when neither skill nor binary exists |
+| `self install [--bin-dir <p>]` | — | `{"installed":true,"already_present":false,"bin":"~/.local/bin/carpenter","on_path":true}` — `on_path` = whether `bin_dir` resolves on `$PATH`; `already_present` = the target binary existed before this install |
+| `self upgrade [--channel stable|nightly] [--source <p>] [--bin-dir <p>] [--no-skill]` | no flag → latest **stable** release; `--channel nightly` → rolling prerelease; `--source` → config `source_dir` → local build | `{"upgraded":true,"version":"0.12.0","bin":"~/.local/bin/carpenter","source":"https://github.com/tensily/Carpenter/releases/latest/download/carpenter-x86_64-unknown-linux-musl.tar.gz","skill":[{"app":"opencode","path":"~/.config/opencode/skills/carpenter/SKILL.md","refreshed":true},{"app":"claude-code","path":"~/.claude/skills/carpenter/SKILL.md","refreshed":true}]}` — `skill` = per-app refresh outcomes (one per registered app): `[{"refreshed":true,"app":"opencode",…},{"refreshed":true,"app":"claude-code",…}]` · nothing registered ⇒ `{refreshed:false,reason:"not_registered",warning:"…"}` · `--no-skill` ⇒ `skill:null` |
+| `self uninstall [--bin-dir <p>] [--purge-config] [--yes]` | — | `{"uninstalled":true,"bin":"~/.local/bin/carpenter","skill":[{"app":"opencode","path":"~/.config/opencode/skills/carpenter/SKILL.md","removed":true},{"app":"claude-code","path":"~/.claude/skills/carpenter/SKILL.md","removed":true}],"config_purged":false}` — prints a removal plan and confirms on stdin unless `--yes` (decline/EOF ⇒ `Conflict`) · `skill` = per-app removal outcomes (one per registered app): `[{"removed":true,"app":"opencode",…},{"removed":true,"app":"claude-code",…}]` · nothing registered ⇒ `{removed:false,reason:"not_registered"}` · `bin:null` when no binary was present · `NotFound` when no skill, binary, or data dir exists |
 <!-- END GENERATED -->
 
-`upgrade` mode resolves: `--source <p>` → config `source_dir` → **published
+`self upgrade` mode resolves: `--source <p>` → config `source_dir` → **published
 release** (curl + `SHA256SUMS` verify + extract — the same pipeline
 `scripts/install.sh` uses). The release channel (adr/021) picks the base URL:
 `stable` (default) follows the Latest release published from `main`;
@@ -24,12 +24,20 @@ The `not_registered` warning string is single-sourced here; see
 [adr/004](../adr/004-build-install-split.md), [adr/018](../adr/018-upgrade-fetches-release.md),
 [adr/021](../adr/021-nightly-main-channels.md).
 
-`uninstall` is the inverse of `install`/`register` ([adr/019](../adr/019-uninstall-semantics.md)):
-skill removal (every registered app, each best-effort —
+`self uninstall` is the inverse of `self install`/`self register` ([adr/019](../adr/019-uninstall-semantics.md)):
+it first prints a **removal plan** to stderr (binary, per-app skill paths,
+config, kept data dir) and asks for confirmation on stdin — explicit `y`/`Y`
+proceeds; Enter, any other answer, or EOF (no confirmation stream, e.g. a
+piped/closed stdin) declines with a `Conflict` envelope and nothing is removed.
+`--yes` skips the prompt (non-interactive). Confirmed, the run mirrors the
+plan: skill removal (every registered app, each best-effort —
 `{removed:false,reason:"not_registered"}` when none, never fails the run), then
-the binary is deleted (safe while running on Linux/macOS). `NotFound` when
-neither skill nor binary exists. Config is kept unless `--purge-config`; course
-data is never touched.
+the binary is deleted (safe while running on Linux/macOS). `NotFound` only when
+no leg exists at all — no skill, no binary, **and** no data dir. Config is kept
+unless `--purge-config`, which removes the **running tag's** config file
+(`<config base>/<tag>/config.json`; IO failures are error envelopes, never a
+silent `config_purged:false`); course data is never touched. Skills are
+machine-global per tag (adr/027) — `--bin-dir` scopes only the binary.
 
 The `curl | sh` installer (`scripts/install.sh`) is the human-facing sibling of
 `upgrade`'s release pipeline: branded banner + install plan (download source,

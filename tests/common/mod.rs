@@ -117,11 +117,18 @@ pub fn sandboxed(exe: &Path, root: &Path) -> Command {
 
 /// The sandboxed opencode paths for `root`: (`SKILL.md`, `opencode.json`).
 pub fn opencode_paths(root: &Path) -> (PathBuf, PathBuf) {
+    // install.sh's default channel is nightly → the skill tag is
+    // `carpenter-nightly` (adr/027: underscored command, kebab skill)
+    opencode_paths_for(root, "carpenter-nightly")
+}
+
+/// The sandboxed opencode paths for an explicit skill tag.
+pub fn opencode_paths_for(root: &Path, tag: &str) -> (PathBuf, PathBuf) {
     let cfg = config_root(root);
     let skill = cfg
         .join("opencode")
         .join("skills")
-        .join("carpenter")
+        .join(tag)
         .join("SKILL.md");
     let perms = cfg.join("opencode").join("opencode.json");
     (skill, perms)

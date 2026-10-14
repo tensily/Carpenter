@@ -1,9 +1,29 @@
 #!/usr/bin/env bash
-# Pre-commit lint gate: cargo fmt on staged Rust changes.
-# Enable after clone: git config core.hooksPath .githooks
+# Pre-commit gates: branch-name convention (adr/027) + cargo fmt on staged
+# Rust changes. Enable after clone: git config core.hooksPath .githooks
 
 set -euo pipefail
 
+# --- branch-name gate (adr/027) --------------------------------------------
+# A branch's name becomes its install tag and command name (`ivan/topic` →
+# `carpenter_ivan_topic`), so it must sanitize cleanly: kebab-case segments
+# joined by `/`, max 60 chars. `main`/`nightly` are exempt (channel branches —
+# they install under the stock/canary names, not a branch tag).
+branch=$(git branch --show-current)
+if [ -n "$branch" ] && [ "$branch" != "main" ] && [ "$branch" != "nightly" ]; then
+    bad_branch() {
+        echo "carpenter: branch name '$branch' breaks install tagging (adr/027)." >&2
+        echo "  Convention: lowercase kebab-case segments joined by '/' (e.g. ivan/my-topic)," >&2
+        echo "  [a-z0-9] only, single '-' inside a segment, max 60 chars." >&2
+        echo "  Rename with: git branch -m <new-name>" >&2
+        exit 1
+    }
+    printf '%s' "$branch" | grep -Eq '^([a-z0-9]+(-[a-z0-9]+)*)(/[a-z0-9]+(-[a-z0-9]+)*)?$' \
+        || bad_branch
+    [ "${#branch}" -le 60 ] || bad_branch
+fi
+
+# --- fmt gate ----------------------------------------------------------------
 # Index column (X of `XY path`): A/M/R/C = staged; covers intent-to-add too.
 if ! git status --porcelain | grep -Eq '^[AMRC].*\.rs$'; then
     exit 0

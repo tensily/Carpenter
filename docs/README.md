@@ -98,14 +98,32 @@ protected branch and holds no credentials.
 
   ```sh
   curl -LsSf https://github.com/tensily/Carpenter/releases/download/nightly/install.sh | sh
-  carpenter upgrade --channel nightly
+  carpenter_nightly self upgrade --channel nightly
   ```
 
 - **stable (`vX.Y.Z`)** — immutable, versioned from `Cargo.toml`, published when
   `nightly` merges into `main`. GitHub marks it **Latest**, so the README
-  one-liner and `carpenter upgrade` (default `--channel stable`) follow it.
+  one-liner and `carpenter self upgrade` (default `--channel stable`) follow it.
   Users never see nightly — the README is end-user-only (install + getting
   started; stable).
+
+**Install identities (adr/027)** — only stable installs as `carpenter`; every
+other install names itself: nightly → `carpenter_nightly`, a branch install →
+`carpenter_<branch-dashes-as-underscores>` (e.g. `carpenter_ivan_topic`). The
+skill/data identity stays kebab (`carpenter-nightly`,
+`carpenter-ivan-topic`) — agent-app skill names forbid `_` — and each install
+is fully isolated (own data dir, skill, permission key). `carpenter self list`
+discovers every install by tag; `carpenter self remove <tag>` removes any of
+them. For branch installs use `scripts/install-branch.sh [branch]`.
+
+**Branch naming convention** — a branch name becomes an install tag, so it
+must survive sanitization unchanged: lowercase `[a-z0-9]` segments joined by
+single `-`, segments joined by `/` (`ivan/my-topic`), max 60 chars, never
+`main`/`nightly` (channel branches). Anything else (uppercase, underscores,
+spaces, leading dashes, >60 chars) would collapse under `slugify` and could
+collide with another install's tag. The `.githooks/pre-commit` hook (enable
+with `git config core.hooksPath .githooks`) rejects non-conforming branch
+names at commit time.
 
 **PR ground rules** (feature branches → `nightly`;
 [`.github/PULL_REQUEST_TEMPLATE.md`](../.github/PULL_REQUEST_TEMPLATE.md),
