@@ -3,7 +3,9 @@
 //! plan, channel-correct tagline (the stable release's tag-patched copy must
 //! drop the `nightly` mark), non-interactive auto-proceed, and the interactive
 //! consent gate (declining installs nothing). Sandbox: per-test `HOME` +
-//! `XDG_CONFIG_HOME`, so nothing touches real user config.
+//! `XDG_CONFIG_HOME`, so nothing touches real user config. Plain lanes run
+//! detached (`setsid`, stdin nulled) so the `/dev/tty` consent gate takes the
+//! CI non-interactive path regardless of the runner's terminal.
 
 mod common;
 
@@ -44,25 +46,121 @@ fn stub_opencode(root: &Path) {
 }
 
 fn run_installer(script: &Path, root: &Path, fixture: &Path) -> std::process::Output {
-    Command::new("sh")
-        .arg(script)
-        .env("HOME", root)
-        .env("XDG_CONFIG_HOME", config_root(root))
-        .env(
-            "CARPENTER_DOWNLOAD_BASE",
-            format!("file://{}", fixture.display()),
-        )
-        .env("CARPENTER_INSTALL_DIR", root.join("bin"))
-        .env(
-            "PATH",
-            format!(
-                "{}:{}",
-                root.join("stub").display(),
-                std::env::var("PATH").unwrap_or_default()
+    run_bounded(
+        detached_sh(script)
+            .env("HOME", root)
+            .env("XDG_CONFIG_HOME", config_root(root))
+            .env(
+                "CARPENTER_DOWNLOAD_BASE",
+                format!("file://{}", fixture.display()),
+            )
+            .env("CARPENTER_INSTALL_DIR", root.join("bin"))
+            .env(
+                "PATH",
+                format!(
+                    "{}:{}",
+                    root.join("stub").display(),
+                    std::env::var("PATH").unwrap_or_default()
+                ),
             ),
-        )
-        .output()
-        .unwrap()
+        "install.sh",
+    )
+}
+
+/// Wall-clock cap on one install.sh run. The script's prompts read `/dev/tty`,
+/// so a spawn that inherits the session's controlling terminal — a local
+/// `cargo test` from a terminal; CI has no ctty — can block on the
+/// developer's keyboard. The cap turns such a regression into a
+/// transcript-bearing failure in seconds instead of a silent suite-wide stall.
+const INSTALL_TIMEOUT: Duration = Duration::from_secs(60);
+
+/// Whether `setsid` (util-linux) exists. It does not on macOS, where the
+/// plain spawn stands in — macOS CI has no ctty either, and
+/// [`run_bounded`] still bounds the run.
+fn has_setsid() -> bool {
+    Command::new("setsid")
+        .arg("true")
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false)
+}
+
+/// The installer launcher: `setsid sh <script>` where possible, else plain
+/// `sh <script>`. Two layers keep install.sh deterministic, matching CI (no
+/// ctty): the interactive gate itself is decided by piped stdout/stderr
+/// (`[ -t 1 ] || [ -t 2 ]` — never a tty here), and setsid detaches the
+/// session's ctty so any `read -r answer </dev/tty` that does run fails
+/// immediately (no ctty → open gives ENXIO → abort path) instead of blocking
+/// on the developer's keyboard. Verified locally: with a ctty, a plain spawn
+/// blocks in that read; under setsid it fails fast. stdin is nulled
+/// separately in [`run_bounded`]: the prompts read /dev/tty (stdin carries
+/// the piped payload under `curl | sh`), so a closed stdin alone cannot
+/// decide the gate.
+fn detached_sh(script: &Path) -> Command {
+    let setsid = has_setsid();
+    let mut cmd = Command::new(if setsid { "setsid" } else { "sh" });
+    if setsid {
+        cmd.arg("sh");
+    }
+    cmd.arg(script);
+    cmd
+}
+
+/// Poll `child` until it exits or `deadline` passes; on expiry kill it, reap
+/// it, and return `None` so the caller can fail with its own context. The
+/// direct child owns the whole subprocess lifetime: `setsid` execs the shell
+/// in-place (a `Command` spawn never makes it a process-group leader, so it
+/// never forks), and `script` owns the pty lane's lifetime.
+fn wait_deadline(child: &mut Child, deadline: Instant) -> Option<std::process::ExitStatus> {
+    loop {
+        if let Some(status) = child.try_wait().unwrap() {
+            return Some(status);
+        }
+        if Instant::now() >= deadline {
+            let _ = child.kill();
+            let _ = child.wait();
+            return None;
+        }
+        std::thread::sleep(Duration::from_millis(20));
+    }
+}
+
+/// Spawn `cmd` with piped output and a hard deadline: kill the child and
+/// panic with its transcript on expiry, else return the captured
+/// [`std::process::Output`]. Reader threads drain the pipes while `try_wait`
+/// polls, so a chatty child cannot deadlock on a full pipe — and stdin is
+/// nulled explicitly (spawn inherits it, unlike `output()`).
+fn run_bounded(cmd: &mut Command, what: &str) -> std::process::Output {
+    cmd.stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    let mut child = cmd.spawn().unwrap();
+    let stdout = Arc::new(Mutex::new(String::new()));
+    let stderr = Arc::new(Mutex::new(String::new()));
+    let pumps = vec![
+        pump(child.stdout.take().unwrap(), Arc::clone(&stdout)),
+        pump(child.stderr.take().unwrap(), Arc::clone(&stderr)),
+    ];
+    let deadline = Instant::now() + INSTALL_TIMEOUT;
+    let status = wait_deadline(&mut child, deadline);
+    for p in pumps {
+        let _ = p.join();
+    }
+    let Some(status) = status else {
+        panic!(
+            "{what} must finish within {INSTALL_TIMEOUT:?} — a prompt likely grabbed a \
+             tty: {}{}",
+            stdout.lock().unwrap(),
+            stderr.lock().unwrap()
+        );
+    };
+    let out = std::mem::take(&mut *stdout.lock().unwrap()).into_bytes();
+    let err = std::mem::take(&mut *stderr.lock().unwrap()).into_bytes();
+    std::process::Output {
+        status,
+        stdout: out,
+        stderr: err,
+    }
 }
 
 fn stdout(out: &std::process::Output) -> String {
@@ -352,10 +450,18 @@ impl Pty {
         stdin.flush().unwrap();
     }
 
-    /// Wait for the child, then close stdin (an early close tears the pty
-    /// down on macOS) and return the full transcript (CRs stripped).
+    /// Wait for the child — bounded: a `script` wedged on a prompt no answer
+    /// will reach fails with the transcript instead of hanging the binary —
+    /// then close stdin (an early close tears the pty down on macOS) and
+    /// return the full transcript (CRs stripped).
     fn finish(mut self) -> String {
-        let _ = self.child.wait().unwrap();
+        let deadline = Instant::now() + PTY_TIMEOUT;
+        if wait_deadline(&mut self.child, deadline).is_none() {
+            panic!(
+                "install.sh must exit under script(1) within {PTY_TIMEOUT:?}: {}",
+                self.snapshot()
+            );
+        }
         self.stdin.take(); // close stdin only after the child exited
         for reader in self.readers.drain(..) {
             let _ = reader.join();
