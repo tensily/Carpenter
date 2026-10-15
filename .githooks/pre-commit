@@ -24,8 +24,9 @@ if [ -n "$branch" ] && [ "$branch" != "main" ] && [ "$branch" != "nightly" ]; th
 fi
 
 # --- fmt gate ----------------------------------------------------------------
-# Index column (X of `XY path`): A/M/R/C = staged; covers intent-to-add too.
-if ! git status --porcelain | grep -Eq '^[AMRC].*\.rs$'; then
+# Index column (X of `XY path`): A/M/R/C = staged; a space + worktree A is
+# intent-to-add (`git add -N` leaves X blank), so match that form too.
+if ! git status --porcelain | grep -Eq '^([AMRC]| A).*\.rs$'; then
     exit 0
 fi
 

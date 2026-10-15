@@ -7,9 +7,11 @@
 # study-chain pass on the validated intro-stats corpus.
 #
 # Needs uv (venv) + network (deps) + python3 (learner edit); skips gracefully
-# when uv is absent — the CI gates job installs uv, so CI runs it for real.
+# when either is absent. CI installs uv but never runs this suite — every
+# scenario is #[ignore]d, so scenarios are local-only (tests/scenarios.rs).
 
 command -v uv >/dev/null 2>&1 || { echo "study-chain: uv not found, skipping"; exit 0; }
+command -v python3 >/dev/null 2>&1 || { echo "study-chain: python3 not found, skipping"; exit 0; }
 
 set -eu
 . "$(dirname "$0")/lib.sh"
