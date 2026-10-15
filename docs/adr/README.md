@@ -15,7 +15,7 @@ sequence are retired decisions (not listed). Read topically; start with the inde
 | 009 | [009-skill-assembled-from-fields.md](009-skill-assembled-from-fields.md) | SKILL.md assembled from code fields, no template |
 | 010 | [010-live-check-state.md](010-live-check-state.md) | live check state via `pass_or_fail` (no `attempts` table); helper rw |
 | 011 | [011-skip-db-authored.md](011-skip-db-authored.md) | skip is DB-authored + rendered (not notebook-parsed) |
-| 012 | [012-cross-platform-paths.md](012-cross-platform-paths.md) | per-OS paths via `core/platform.rs` (`#[cfg(target_os)]`) + 3-OS CI |
+| 012 | [012-cross-platform-paths.md](012-cross-platform-paths.md) | per-OS paths via `dirs` only — no `core/platform.rs`; Windows dropped (rescoped 2026-08-18) |
 | 013 | [013-compile-enforced-scenarios.md](013-compile-enforced-scenarios.md) | compile-enforced multi-command scenarios (≥3 distinct fns per `examples/*.md`) |
 | 014 | [014-yaml-spec-input.md](014-yaml-spec-input.md) | YAML is the single `--spec` format (no JSON code path; `serde-yml`) |
 | 015 | [015-reference-solution-verify.md](015-reference-solution-verify.md) | author reference `solution` field + `lesson verify` (answer-key lock) |

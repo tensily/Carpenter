@@ -65,3 +65,7 @@ Driver: agents had to run `carpenter howto` as a separate step to see command de
 round-trip. Accepted cost: `SKILL.md` is large (~hundreds of lines) and loads into the
 agent's context on every carpenter turn — traded for always-on command detail. Easy to
 reverse (drop the `{manual}` line in `render()`).
+
+*(Revision 2026-10-15: the composing fn is `skill::render` — no `write_skill()`
+exists; `upgrade` refreshes via `skill::register` only when the skill is already
+registered, adr/018.)*

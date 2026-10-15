@@ -41,3 +41,7 @@ Three commands:
   absent so the user knows nothing was refreshed.
 − Three commands to discover instead of one overloaded `build`; mitigated by the
   scraped `howto`.
+
+*(Revision 2026-10-15: the shared `write_skill()` helper named above no longer
+exists — the mechanism is `core/skill.rs`'s `render`/`register`; and since
+adr/018 `upgrade` refreshes only an already-registered skill in both modes.)*

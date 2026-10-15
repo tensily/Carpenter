@@ -35,6 +35,10 @@ Rulesets only, one per trunk:
 - **Bypass actors on `nightly`**: the owner (User 53997283, `always`) and
   the release-bot App (`Integration` 4769844, `always`) — see the post-drill
   revision: on a user-owned repo these cover human pushes only.
+
+  *(Revision 2026-10-05: the release-bot App bypass was removed with the
+  ladder it served — [adr/025](025-standard-release-flow.md); bypass is the
+  owner alone.)*
 - Classic branch protection on `main` deleted; the ruleset already carried
   the stricter settings. One source of truth per trunk.
 - **No-cascade by suppression, not token semantics.** App-token pushes fire

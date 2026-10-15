@@ -29,7 +29,9 @@ uv run jupyter nbconvert --execute --inplace \
   `{details:{index, ename, evalue}}`.
 - `--allow-errors` — runs every cell, returns
   `{cells:{total, ran, errored}, errors:[…]}`.
-- `--timeout <s>` per cell (default 30).
+- `--timeout <s>` per cell (default 30). The live timeout is this clap flag —
+  `config`'s `timeout_secs` key is stored/reserved but not consulted by the
+  execution paths.
 - Persists outputs in place; nbconvert preserves cell metadata/tags → the next
   `lesson sync` still reconciles correctly.
 - Requires the venv (`StoreError` "run `carpenter venv create` first" if absent).

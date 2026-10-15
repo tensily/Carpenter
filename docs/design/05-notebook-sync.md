@@ -6,7 +6,7 @@ managed cell tagged `metadata.managed`:
 | cell | metadata | sync |
 |------|----------|------|
 | Lesson title | `managed=title, lesson_id` | regenerated from `lessons.title` |
-| Skip config | `managed=skip-config, lesson_id` | regenerated from `lessons.skip` + child `skip` columns; read-only `_skip_config()` the learner/agent may call |
+| Skip config | `managed=skip-config, lesson_id` | regenerated from `lessons.skip` + child `skip` columns; read-only `is_skipped(target)` the learner/agent may call (delegates to the helper) |
 | Section markdown snippet | `managed=section-md, section_id, snippet_id` | regenerated from snippet `content` |
 | Section code snippet | `managed=section-code, section_id, snippet_id` | regenerated from snippet `content` |
 | Question markdown | `managed=question-md, practice_id` *or* `quiz_id`, `lesson_id` | regenerated from the stub's `prompt` (omitted when the prompt is empty) |

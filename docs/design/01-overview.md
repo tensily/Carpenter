@@ -33,7 +33,8 @@ proves real.
   [data-model/04](../data-model/04-status-derivation.md).
 
 ## IDs
-Stable strings assigned by carpenter (`max+1` per table, never reused).
+Stable strings assigned by carpenter (monotonic per-table `id_seq` counter,
+never reused).
 - Course/lesson: slug (`data-structures`, `arrays-101`); lesson dir = `NN-slug`.
 - Section `s1..`, Practice `p1..`, Quiz `q1..`, TestCase `c1..`, Note `n1..`,
   Plan `pl1..`, Goal `g1..` (globally unique within their table).

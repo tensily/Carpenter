@@ -2,21 +2,22 @@
 
 - **Primary keys:** stable string ids (`s1`, `p1`, `q1`, `c1`, `n1`, `pl1`, `g1`),
   assigned by carpenter, globally unique **within their table** (the `id` column is
-  the PK). Assignment is `max+1` per table over existing numeric suffixes; deleted
-  ids are **never reused**. SQLite `rowid` is ignored as a key. (The `a1` attempts
-  prefix was removed with that table — adr/010.) **Exception — `lesson update
-  --force`:** children whose spec content is unchanged keep their ids **and** their
-  learner-state columns (`skip`, `pass_or_fail`, `last_check`); new or
-  content-edited children take fresh `max+1` allocation; ids of removed children
-  are still never reused.
+  the PK). Assignment is a monotonic per-table counter (`id_seq` in `core/db.rs`),
+  so deleted ids are **never reused**. SQLite `rowid` is ignored as a key. (The
+  `a1` attempts prefix was removed with that table — adr/010.) **Exception —
+  `lesson update --force`:** children whose spec content is unchanged keep their
+  ids **and** their learner-state columns (`skip`, `pass_or_fail`, `last_check`);
+  new or content-edited children take fresh allocation; ids of removed children
+  are still never reused. (File-backed bug/feature ids are the other shape:
+  `max+1` over existing `<prefix><N>.json` files — `core/bugfile.rs`.)
 - **Foreign keys:** plain `<parent>_id` columns; `PRAGMA foreign_keys = ON`.
   **Exceptions (no FK, polymorphic/free refs):** `test_cases.owner_id` (→ practice
   or quiz, disambiguated by `owner_type`), `notes.related`, `plans.scope_id`,
   `goals.covered_by` (JSON array). Orphan cleanup on parent delete is the app's job.
 - **Booleans:** `INTEGER`, `0`/`1` (e.g. `pass_or_fail`, `skip`, `goals.override`).
 - **JSON payloads** (`args`, `kwargs`, `expected`, `last_check`, `tags`,
-  `covered_by`, `sections.snippets`) stored as `TEXT` (JSON); queried via SQLite
-  JSON1.
+  `covered_by`, `sections.snippets`) stored as `TEXT` (JSON); parsed and queried
+  in Rust via `serde_json` — no SQLite JSON1 functions.
 - **Section snippets:** ordered `[{id, kind, content}]` where `kind ∈
   {markdown, code}`; `snippets[0].kind` must be `markdown` (app-enforced — can't
   CHECK inside a JSON array). Each snippet renders as one notebook cell.

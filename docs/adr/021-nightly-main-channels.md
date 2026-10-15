@@ -79,4 +79,8 @@ promotion bumps a minor (a release-bot GitHub App lands it on PR open, the
 guard enforces it), and a recut job fast-forwards `nightly` to the promotion
 merge. See [adr/022](022-automated-version-ladder.md).
 
+*(Revision 2026-10-05: reverted by [adr/025](025-standard-release-flow.md) —
+the ladder is retired; versions are bumped by humans via `cargo xtask bump`
+and CI commits nothing.)*
+
 Supersedes [adr/020](020-branch-governed-channels.md).

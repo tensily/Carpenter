@@ -26,7 +26,7 @@ the OS automatically: `~/.config` Linux, `~/Library/Application Support` macOS.
   shell/shebang portability concerns.
 - Unlinking (or rename-replacing) a running binary is safe — the kernel keeps
   the inode alive (`upgrade`'s copy-replace and `uninstall`'s self-delete
-  rely on this; see `strip_deleted` in `core/skill.rs`).
+  rely on this; see `strip_deleted` in `core/store.rs`).
 - `python3` exists on PATH (both CI lanes install it); the two probe tests
   (compare parity, helper validity) still `return` on spawn failure —
   no-op, not fail.
