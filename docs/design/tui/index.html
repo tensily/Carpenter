@@ -1,0 +1,379 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>carpenter — course builder</title>
+  <link rel="stylesheet" href="css/tokens.css">
+  <link rel="stylesheet" href="css/layout.css">
+  <link rel="stylesheet" href="css/components.css">
+</head>
+<body class="c-frame">
+
+  <header class="c-header">
+    <strong>carpenter</strong>
+    <code>linalg-for-ml</code>
+    <nav>
+      <button type="button" class="c-btn c-btn--ghost" data-nav="board">Board</button>
+      <button type="button" class="c-btn c-btn--ghost" data-nav="home">Home</button>
+    </nav>
+  </header>
+
+  <main class="c-main">
+
+    <section class="c-screen" data-screen="home">
+      <div class="c-panel">
+        <div class="c-panel__head">
+          <h1 class="c-panel__title">Courses</h1>
+        </div>
+        <div class="c-panel__body">
+          <div class="c-list">
+            <button type="button" class="c-row c-row--clickable">
+              <code>linalg-for-ml</code>
+              <span>Computational Linear Algebra for ML</span>
+              <span class="c-progress"><span class="c-progress__fill" style="width:22%"></span></span>
+              <span>2/9 lessons</span>
+            </button>
+            <button type="button" class="c-row c-row--clickable">
+              <code>python-foundations</code>
+              <span>Python Foundations</span>
+              <span class="c-progress"><span class="c-progress__fill" style="width:80%"></span></span>
+              <span>8/10 lessons</span>
+            </button>
+          </div>
+          <div class="c-actions">
+            <button type="button" class="c-btn c-btn--primary" data-nav="intake">New course</button>
+          </div>
+          <div class="c-empty" hidden>No courses yet — press <kbd class="c-kbd">n</kbd> to start</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="c-screen" data-screen="intake" hidden>
+      <ol class="c-stepper">
+        <li class="c-step c-step--active">1 · Outcome</li>
+        <li class="c-step">2 · Background</li>
+        <li class="c-step">3 · Constraints</li>
+      </ol>
+      <div class="c-panel">
+        <div class="c-panel__head">
+          <h1 class="c-panel__title">New course</h1>
+        </div>
+        <div class="c-panel__body">
+          <div class="c-field">
+            <label for="f-outcome">What do you want to learn, and why?</label>
+            <textarea class="c-textarea" id="f-outcome" rows="4"></textarea>
+          </div>
+          <div class="c-field">
+            <label for="f-background">Background</label>
+            <div class="c-chips" id="f-background" role="group">
+              <button type="button" class="c-chip c-chip--on" aria-pressed="true">Python basics</button>
+              <button type="button" class="c-chip" aria-pressed="false">NumPy</button>
+              <button type="button" class="c-chip" aria-pressed="false">pandas</button>
+              <button type="button" class="c-chip" aria-pressed="false">plotting</button>
+              <button type="button" class="c-chip" aria-pressed="false">ML basics</button>
+              <button type="button" class="c-chip" aria-pressed="false">math refresh</button>
+            </div>
+          </div>
+          <div class="c-field">
+            <label for="f-time">Time budget</label>
+            <input class="c-input" id="f-time" type="text" value="~6 weeks">
+          </div>
+          <div class="c-field">
+            <label for="f-pace">Pace</label>
+            <div class="c-chips" id="f-pace" role="group">
+              <button type="button" class="c-chip" aria-pressed="false">relaxed</button>
+              <button type="button" class="c-chip c-chip--on" aria-pressed="true">steady</button>
+              <button type="button" class="c-chip" aria-pressed="false">intense</button>
+            </div>
+          </div>
+          <div class="c-field">
+            <label for="f-depth">Depth</label>
+            <div class="c-chips" id="f-depth" role="group">
+              <button type="button" class="c-chip" aria-pressed="false">intuition</button>
+              <button type="button" class="c-chip c-chip--on" aria-pressed="true">balanced</button>
+              <button type="button" class="c-chip" aria-pressed="false">rigorous</button>
+            </div>
+          </div>
+          <div class="c-actions">
+            <button type="button" class="c-btn c-btn--ghost" data-nav="home">Back</button>
+            <button type="button" class="c-btn c-btn--primary" data-nav="review">Continue</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="c-screen" data-screen="review" hidden>
+      <div class="c-panel">
+        <div class="c-panel__head">
+          <h1 class="c-panel__title">Course spec</h1>
+        </div>
+        <div class="c-panel__body">
+          <dl class="c-kv" id="spec-preview">
+            <dt>title</dt>
+            <dd>Computational Linear Algebra for ML</dd>
+            <dt>slug</dt>
+            <dd><code>linalg-for-ml</code></dd>
+            <dt>goal</dt>
+            <dd>Build ML-ready linear-algebra intuition from vectors to SVD</dd>
+            <dt>description</dt>
+            <dd>Vectors, matrices, systems, decompositions, and ML applications.</dd>
+          </dl>
+          <div class="c-actions">
+            <button type="button" class="c-btn c-btn--ghost" data-nav="intake">Back</button>
+            <button type="button" class="c-btn c-btn--primary" data-action="confirm-scaffold">Confirm scaffold</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="c-screen" data-screen="board" hidden>
+      <div class="c-panel">
+        <div class="c-panel__head">
+          <h1 class="c-panel__title">Computational Linear Algebra for ML</h1>
+          <span class="c-badge c-badge--confirmed" id="plan-status">plan confirmed</span>
+        </div>
+        <div class="c-panel__body">
+          <p>Vectors, matrices, systems, decompositions, and ML applications.</p>
+        </div>
+      </div>
+      <div class="c-panel">
+        <div class="c-panel__head">
+          <h2 class="c-panel__title">Goals</h2>
+        </div>
+        <div class="c-panel__body">
+          <div class="c-list" id="goals-list">
+            <div class="c-row">
+              <span>Rebuild vector and matrix intuition in NumPy</span>
+              <code>g1</code>
+              <span class="c-badge c-badge--verified">vectors-refresher</span>
+              <span class="c-badge c-badge--created">matrices-refresher</span>
+            </div>
+            <div class="c-row">
+              <span>Solve linear systems and understand LU decomposition</span>
+              <code>g2</code>
+              <span class="c-badge c-badge--created">systems-and-elimination</span>
+              <span class="c-badge c-badge--planned">lu-decomposition</span>
+            </div>
+            <div class="c-row">
+              <span>Build geometric intuition for eigenvalues and the SVD</span>
+              <code>g3</code>
+              <span class="c-badge c-badge--planned">determinants-and-eigenvectors</span>
+              <span class="c-badge c-badge--planned">svd</span>
+            </div>
+            <div class="c-row">
+              <span>Apply decompositions to core ML workflows</span>
+              <code>g4</code>
+              <span class="c-badge c-badge--planned">ml-linear-regression</span>
+              <span class="c-badge c-badge--planned">ml-pca</span>
+              <span class="c-badge c-badge--planned">ml-neural-network</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="c-panel">
+        <div class="c-panel__head">
+          <h2 class="c-panel__title">Lesson outline</h2>
+        </div>
+        <div class="c-panel__body">
+          <div class="c-list" id="lesson-list">
+            <button type="button" class="c-row c-row--clickable">
+              <span class="c-badge c-badge--verified">verified</span>
+              <span>Vectors: A Computational Refresher</span>
+              <code>vectors-refresher</code>
+            </button>
+            <button type="button" class="c-row c-row--clickable">
+              <span class="c-badge c-badge--created">created</span>
+              <span>Matrices in NumPy</span>
+              <code>matrices-refresher</code>
+            </button>
+            <button type="button" class="c-row c-row--clickable">
+              <span class="c-badge c-badge--created">created</span>
+              <span>Systems and Elimination</span>
+              <code>systems-and-elimination</code>
+            </button>
+            <button type="button" class="c-row c-row--clickable">
+              <span class="c-badge c-badge--planned">planned</span>
+              <span>LU Decomposition</span>
+              <code>lu-decomposition</code>
+            </button>
+            <button type="button" class="c-row c-row--clickable">
+              <span class="c-badge c-badge--planned">planned</span>
+              <span>Determinants and Eigenvectors</span>
+              <code>determinants-and-eigenvectors</code>
+            </button>
+            <button type="button" class="c-row c-row--clickable">
+              <span class="c-badge c-badge--planned">planned</span>
+              <span>Singular Value Decomposition</span>
+              <code>svd</code>
+            </button>
+            <button type="button" class="c-row c-row--clickable">
+              <span class="c-badge c-badge--planned">planned</span>
+              <span>Linear Regression</span>
+              <code>ml-linear-regression</code>
+            </button>
+            <button type="button" class="c-row c-row--clickable">
+              <span class="c-badge c-badge--planned">planned</span>
+              <span>PCA</span>
+              <code>ml-pca</code>
+            </button>
+            <button type="button" class="c-row c-row--clickable">
+              <span class="c-badge c-badge--planned">planned</span>
+              <span>Neural Networks</span>
+              <code>ml-neural-network</code>
+            </button>
+          </div>
+        </div>
+      </div>
+      <div class="c-panel" id="progress-rollup">
+        <div class="c-panel__head">
+          <h2 class="c-panel__title">Progress</h2>
+        </div>
+        <div class="c-panel__body">
+          <div class="c-progress"><div class="c-progress__fill" style="width:22%"></div></div>
+          <p>2/9 lessons · 2 created · 1 verified · 0 skipped</p>
+        </div>
+      </div>
+      <div class="c-actions">
+        <button type="button" class="c-btn c-btn--ghost" data-nav="pivot">Pivot plan</button>
+      </div>
+    </section>
+
+    <section class="c-screen" data-screen="lesson" hidden>
+      <div class="c-panel">
+        <div class="c-panel__head">
+          <h1 class="c-panel__title" id="lesson-title">Vectors: A Computational Refresher</h1>
+          <span class="c-badge c-badge--verified">verified</span>
+        </div>
+        <div class="c-panel__body">
+          <p><code>lessons/01-vectors-refresher</code></p>
+          <button type="button" class="c-btn c-btn--ghost">open in VS Code</button>
+        </div>
+      </div>
+      <div class="c-actions" id="lesson-actions">
+        <button type="button" class="c-btn c-btn--primary" data-action="lesson-execute">Execute</button>
+        <button type="button" class="c-btn c-btn--ghost" data-action="lesson-verify">Mark verified</button>
+        <button type="button" class="c-btn c-btn--ghost" data-action="lesson-skip">Skip</button>
+        <button type="button" class="c-btn c-btn--ghost" data-nav="board">Back to board</button>
+      </div>
+      <div class="c-panel">
+        <div class="c-panel__head">
+          <h2 class="c-panel__title">Feedback</h2>
+        </div>
+        <div class="c-panel__body">
+          <div class="c-field">
+            <label for="note-kind">Kind</label>
+            <div class="c-chips" id="note-kind" role="group">
+              <button type="button" class="c-chip" aria-pressed="false">gap</button>
+              <button type="button" class="c-chip" aria-pressed="false">mistake</button>
+              <button type="button" class="c-chip" aria-pressed="false">strength</button>
+              <button type="button" class="c-chip" aria-pressed="false">pattern</button>
+              <button type="button" class="c-chip" aria-pressed="false">progress</button>
+            </div>
+          </div>
+          <div class="c-field">
+            <label for="note-text">Note</label>
+            <textarea class="c-textarea" id="note-text" rows="3"></textarea>
+          </div>
+          <div class="c-actions">
+            <button type="button" class="c-btn c-btn--primary" data-action="add-note">Add note</button>
+          </div>
+        </div>
+      </div>
+      <div class="c-list" id="notes-list">
+        <div class="c-note">
+          <span class="c-badge c-badge--gap">gap</span>
+          <p>Confused about row vs column vectors in the dot-product section.</p>
+          <code>2026-10-14</code>
+        </div>
+      </div>
+    </section>
+
+    <section class="c-screen" data-screen="pivot" hidden>
+      <div class="c-panel">
+        <div class="c-panel__head">
+          <h1 class="c-panel__title">Goals</h1>
+        </div>
+        <div class="c-panel__body">
+          <div class="c-list" id="pivot-goals">
+            <div class="c-row">
+              <div class="c-field">
+                <label for="goal-g1">g1</label>
+                <input class="c-input" id="goal-g1" type="text" value="Rebuild vector and matrix intuition in NumPy">
+              </div>
+              <p><code>vectors-refresher · matrices-refresher</code></p>
+              <button type="button" class="c-btn c-btn--ghost" data-action="goal-remove">Remove</button>
+            </div>
+            <div class="c-row">
+              <div class="c-field">
+                <label for="goal-g2">g2</label>
+                <input class="c-input" id="goal-g2" type="text" value="Solve linear systems and understand LU decomposition">
+              </div>
+              <p><code>systems-and-elimination · lu-decomposition</code></p>
+              <button type="button" class="c-btn c-btn--ghost" data-action="goal-remove">Remove</button>
+            </div>
+            <div class="c-row">
+              <div class="c-field">
+                <label for="goal-g3">g3</label>
+                <input class="c-input" id="goal-g3" type="text" value="Build geometric intuition for eigenvalues and the SVD">
+              </div>
+              <p><code>determinants-and-eigenvectors · svd</code></p>
+              <button type="button" class="c-btn c-btn--ghost" data-action="goal-remove">Remove</button>
+            </div>
+            <div class="c-row">
+              <div class="c-field">
+                <label for="goal-g4">g4</label>
+                <input class="c-input" id="goal-g4" type="text" value="Apply decompositions to core ML workflows">
+              </div>
+              <p><code>ml-linear-regression · ml-pca · ml-neural-network</code></p>
+              <button type="button" class="c-btn c-btn--ghost" data-action="goal-remove">Remove</button>
+            </div>
+          </div>
+          <div class="c-actions">
+            <button type="button" class="c-btn c-btn--ghost" data-action="goal-add">Add goal</button>
+          </div>
+        </div>
+      </div>
+      <div class="c-panel">
+        <div class="c-panel__head">
+          <h2 class="c-panel__title">Proposed changes</h2>
+        </div>
+        <div class="c-panel__body">
+          <div class="c-list" id="pivot-diff">
+            <div class="c-diff-row c-diff-row--mod">g2 relink: + svd-applications</div>
+            <div class="c-diff-row c-diff-row--add">lesson: svd-applications — SVD Applications</div>
+            <div class="c-diff-row c-diff-row--del">lesson: ml-neural-network — Neural Networks (skip)</div>
+          </div>
+        </div>
+      </div>
+      <div class="c-actions">
+        <button type="button" class="c-btn c-btn--ghost" data-nav="board">Cancel</button>
+        <button type="button" class="c-btn c-btn--primary" data-action="confirm-pivot">Confirm revised plan</button>
+      </div>
+    </section>
+
+  </main>
+
+  <footer class="c-keybar">
+    <span><kbd class="c-kbd">←</kbd> <kbd class="c-kbd">→</kbd> navigate</span>
+    <span><kbd class="c-kbd">n</kbd> new course</span>
+    <span><kbd class="c-kbd">p</kbd> pivot</span>
+  </footer>
+
+  <div class="c-modal" id="modal" hidden role="dialog" aria-modal="true" aria-labelledby="modal-title">
+    <div class="c-modal__box">
+      <h2 class="c-panel__title" id="modal-title"></h2>
+      <div id="modal-body"></div>
+      <div class="c-actions">
+        <button type="button" class="c-btn c-btn--ghost" data-action="modal-cancel">Cancel</button>
+        <button type="button" class="c-btn c-btn--primary" id="modal-confirm">Confirm</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="c-toast" id="toast" hidden role="status"></div>
+
+  <script src="js/mock.js" defer></script>
+  <script src="js/app.js" defer></script>
+</body>
+</html>
