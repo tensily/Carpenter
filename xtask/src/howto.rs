@@ -6,6 +6,8 @@
 //! (recursed into nested groups). The EXAMPLE blocks come from
 //! `docs/examples/<module>/<name>.md`, keyed `<module>::<name>` so groups with
 //! same-named leaves (e.g. `course::create` vs `lesson::create`) don't collide.
+//! `self <verb>` leaves (adr/027) dispatch to fns living in other modules, so
+//! they resolve through [`SELF_EXAMPLES`] instead of the default key.
 //! That file is the single source — build.rs enforces its presence per command fn
 //! (adr/007 update), and nothing is scraped from `///` anymore. The SCENARIOS
 //! (`examples/*.md`, each gated to ≥3 distinct command fns by build.rs) are
@@ -69,7 +71,8 @@ pub fn generate() -> String {
 }
 
 /// Render one command (group or leaf). `module` is the top-level command name
-/// (the source file stem), used to look up `<module>::<leaf>` examples.
+/// (the source file stem), used to look up `<module>::<leaf>` examples (self
+/// leaves resolve via [`SELF_EXAMPLES`]).
 fn render(
     cmd: &clap::Command,
     module: &str,
@@ -104,7 +107,7 @@ fn render(
     }
     let subs: Vec<_> = cmd.get_subcommands().collect();
     if subs.is_empty() {
-        if let Some(ex) = examples.get(&format!("{module}::{name}")) {
+        if let Some(ex) = examples.get(&example_key(module, name)) {
             out.push_str(ex.trim());
             out.push_str("\n\n");
         }
@@ -125,6 +128,34 @@ fn push_flag(out: &mut String, f: &clap::Arg) {
         .unwrap_or_default();
     let help = f.get_help().map(|h| h.to_string()).unwrap_or_default();
     out.push_str(&format!("- `{short}{long}{value}` — {help}\n"));
+}
+
+/// `self <verb>` leaf → worked-example key (`docs/examples/<module>/<fn>.md`).
+/// The `self` umbrella (adr/027) dispatches to install-lifecycle command fns
+/// living in their own modules, so the default `<module>::<leaf>` key (module =
+/// `self`) misses. MUST stay in sync with the `self_group`/`self_cmd` dispatch
+/// in `src/app.rs` and with `SELF_VERBS` in `build.rs` (the scenario gate's
+/// copy — build.rs cannot depend on this crate).
+const SELF_EXAMPLES: &[(&str, &str)] = &[
+    ("install", "install::install"),
+    ("upgrade", "upgrade::upgrade"),
+    ("uninstall", "uninstall::uninstall"),
+    ("register", "register::register"),
+    ("deregister", "deregister::deregister"),
+    ("list", "installs::list"),
+    ("remove", "installs::remove"),
+    ("link", "link::register"),
+];
+
+/// Example-map key for a leaf: `self <verb>` resolves through
+/// [`SELF_EXAMPLES`]; every other leaf is `<module>::<leaf>`.
+fn example_key(module: &str, leaf: &str) -> String {
+    if module == "self" {
+        if let Some((_, key)) = SELF_EXAMPLES.iter().find(|(v, _)| *v == leaf) {
+            return (*key).to_string();
+        }
+    }
+    format!("{module}::{leaf}")
 }
 
 fn collect_examples() -> HashMap<String, String> {
@@ -282,4 +313,27 @@ fn howto_excludes_dev_surface() {
         !generated.contains("dev register") && !generated.contains("dev upgrade"),
         "dev-only register/upgrade leaked into howto.gen.md"
     );
+}
+
+#[cfg(all(test, not(feature = "dev")))]
+#[test]
+fn self_leaves_all_resolve_to_examples() {
+    // The `self` lookup is an explicit map, so a leaf added without a map
+    // entry (or a map entry renamed away from its atom) must fail loudly here —
+    // not silently drop the example from the manual the way the pre-map
+    // `<module>::<leaf>` lookup did.
+    let root = app::cli();
+    let self_group = root
+        .get_subcommands()
+        .find(|c| c.get_name() == "self")
+        .expect("self group exists");
+    let examples = collect_examples();
+    for leaf in self_group.get_subcommands() {
+        let key = example_key("self", leaf.get_name());
+        assert!(
+            examples.contains_key(&key),
+            "self {} → {key}: no example atom under docs/examples/",
+            leaf.get_name()
+        );
+    }
 }

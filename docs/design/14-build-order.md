@@ -7,7 +7,8 @@
 > [19-dev-build.md](19-dev-build.md) (dev/release stages) and
 > [AGENTS.md](../../AGENTS.md).
 
-1. Skeleton: `Cargo.toml` (workspace: `carpenter` + `xtask`); `app.rs` + `_emit`
+1. Skeleton: `Cargo.toml` (workspace: `carpenter` + `xtask`); `app.rs` + the
+   envelope harness (today: `run()` + `output::render`)
    + `output` + `error` + `store`; clap wiring for a couple of commands. Add
    `#![deny(missing_docs)]` at the crate root and the `build.rs` syn scanner
    ([adr/007](../adr/007-compile-enforced-command-docs.md)) on day one — so the gates

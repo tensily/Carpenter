@@ -12,8 +12,8 @@ does not hand-duplicate it).
 ~/.config/opencode/skills/carpenter/SKILL.md        (global; only scope supported)
 ```
 The skills dir is `xdg_root()` (= carpenter `config_dir.parent()`), so it tracks the OS
-automatically: `~/.config/opencode` Linux, `%APPDATA%\opencode` Windows —
-[design/17](17-cross-platform.md). Frontmatter is constrained by opencode — `name` + `description` (required) +
+automatically: `~/.config/opencode` Linux, `~/Library/Application Support/opencode`
+macOS — [design/17](17-cross-platform.md). Frontmatter is constrained by opencode — `name` + `description` (required) +
 `license`/`compatibility`/`metadata`. Name must match the dir, regex
 `^[a-z0-9]+(-[a-z0-9]+)*$` → `carpenter` is valid.
 
@@ -47,15 +47,15 @@ under `skill` (leaves the rest of the file intact). Merge, never overwrite.
 |-----|-----------|--------|--------|
 | `opencode` | `~/.config/opencode/skills/` | XDG root | implemented |
 
-opencode is the only agent app. `register` writes the rendered `SKILL.md` and
-merges the `opencode.json` allow entry; `upgrade`/`uninstall` refresh/remove
+opencode is the only agent app. `self register` writes the rendered `SKILL.md` and
+merges the `opencode.json` allow entry; `self upgrade`/`self uninstall` refresh/remove
 the skill only when it is **registered** (skill file present).
 
 ## Commands
 | cmd | behavior |
 |-----|----------|
-| `register [--print-skill]` | write `SKILL.md` (idempotent) + merge the allow entry (`--print-skill` writes the rendered bytes to stdout instead, no filesystem change) |
-| `deregister` | remove `SKILL.md` (+ dir if empty) + remove the allow key |
+| `self register [--print-skill]` | write `SKILL.md` (idempotent) + merge the allow entry (`--print-skill` writes the rendered bytes to stdout instead, no filesystem change) |
+| `self deregister` | remove `SKILL.md` (+ dir if empty) + remove the allow key |
 
 See [specs/21-register-deregister.md](../specs/21-register-deregister.md) for the
 envelopes. `link` (future CLI registry) is a separate concern — see
@@ -63,14 +63,14 @@ envelopes. `link` (future CLI registry) is a separate concern — see
 [adr/006](../adr/006-skill-integration.md).
 
 ## `upgrade` auto-refreshes the skill
-After replacing the binary, `upgrade` updates the skill — how depends on the
-mode (adr/018): **source mode** (`--source` / config `source_dir`) refreshes
-only if the skill file is present (`~/.config/opencode/skills/carpenter/SKILL.md`),
-warns with `reason:"not_registered"` otherwise (the exact warning string is
+After replacing the binary, `upgrade` updates the skill (adr/018): **both** modes
+(source `--source` / config `source_dir`, and release — no flags, the default)
+refresh **only if the skill file is already present**
+(`~/.config/opencode/skills/carpenter/SKILL.md`) and never register a new one,
+warning with `reason:"not_registered"` otherwise (the exact warning string is
 single-sourced in [specs/18-build-install-upgrade.md](../specs/18-build-install-upgrade.md);
-this doc does not duplicate it); **release mode** (no flags — the default)
-re-registers unconditionally, mirroring `scripts/install.sh` (installer parity).
-Both re-render via the same `write_skill()` path `register` uses — embedding the
+this doc does not duplicate it). Refresh re-renders via the same
+`skill::render`/`skill::register` path `self register` uses — embedding the
 **new** version + bin path. Refresh is best-effort (a failure never rolls back
 the binary upgrade). `--no-skill` skips it (`skill:null`).
 See [specs/18-build-install-upgrade.md](../specs/18-build-install-upgrade.md),

@@ -1161,7 +1161,7 @@ fn cli_has_all_top_level_subcommands() {
     }
 }
 
-/// (dev only) the `dev` group + its three leaves must exist in a dev build
+/// (dev only) the `dev` group + its five leaves must exist in a dev build
 /// (absent in release — pinned by the inverse of this in the howto guardrail).
 #[cfg(all(test, feature = "dev"))]
 #[test]

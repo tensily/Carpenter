@@ -7,7 +7,7 @@ pub mod examples {
     /// `(cmd, input, note, data)` rows for the `link` output contract.
     pub fn rows() -> Vec<(&'static str, &'static str, &'static str, Data)> {
         vec![(
-            "register",
+            "self link",
             "—",
             "emits a manifest for a future CLI registry; no filesystem effect",
             Data::LinkRegister {

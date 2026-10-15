@@ -15,7 +15,7 @@ sequence are retired decisions (not listed). Read topically; start with the inde
 | 009 | [009-skill-assembled-from-fields.md](009-skill-assembled-from-fields.md) | SKILL.md assembled from code fields, no template |
 | 010 | [010-live-check-state.md](010-live-check-state.md) | live check state via `pass_or_fail` (no `attempts` table); helper rw |
 | 011 | [011-skip-db-authored.md](011-skip-db-authored.md) | skip is DB-authored + rendered (not notebook-parsed) |
-| 012 | [012-cross-platform-paths.md](012-cross-platform-paths.md) | per-OS paths via `core/platform.rs` (`#[cfg(target_os)]`) + 3-OS CI |
+| 012 | [012-cross-platform-paths.md](012-cross-platform-paths.md) | per-OS paths via `dirs` only — no `core/platform.rs`; Windows dropped (rescoped 2026-08-18) |
 | 013 | [013-compile-enforced-scenarios.md](013-compile-enforced-scenarios.md) | compile-enforced multi-command scenarios (≥3 distinct fns per `examples/*.md`) |
 | 014 | [014-yaml-spec-input.md](014-yaml-spec-input.md) | YAML is the single `--spec` format (no JSON code path; `serde-yml`) |
 | 015 | [015-reference-solution-verify.md](015-reference-solution-verify.md) | author reference `solution` field + `lesson verify` (answer-key lock) |
@@ -24,7 +24,7 @@ sequence are retired decisions (not listed). Read topically; start with the inde
 | 018 | [018-upgrade-fetches-release.md](018-upgrade-fetches-release.md) | `upgrade` defaults to fetching a published release (checksum-verified) |
 | 019 | [019-uninstall-semantics.md](019-uninstall-semantics.md) | `uninstall`: best-effort skill removal, self-delete binary, keep config unless `--purge-config` |
 | 020 | [020-branch-governed-channels.md](020-branch-governed-channels.md) | branch-governed release channels: `pre-release`→`edge` canary, `release`→stable `vX.Y.Z` (Latest) — superseded by 021 |
-| 021 | [021-nightly-main-channels.md](021-nightly-main-channels.md) | nightly + main channels: owner-gated `nightly` trunk, frozen `main`, PR ground rules + dev-validate gate |
+| 021 | [021-nightly-main-channels.md](021-nightly-main-channels.md) | nightly + main channels: owner-gated `nightly` trunk, frozen `main`, PR ground rules + QA gate |
 | 022 | [022-automated-version-ladder.md](022-automated-version-ladder.md) | automated version ladder: patch per nightly merge, minor per promotion, post-promotion recut — superseded by 025 |
 | 023 | [023-ruleset-bypass-actors.md](023-ruleset-bypass-actors.md) | ruleset-only branch protection on both trunks; explicit bypass actors (owner, `github-actions[bot]` as User, release-bot App) |
 | 024 | [024-install-consent-and-banner.md](024-install-consent-and-banner.md) | installer consent plan + branded banner (channel-correct tagline, deck palette, non-interactive lanes proceed) |

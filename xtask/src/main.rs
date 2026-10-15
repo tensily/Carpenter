@@ -22,17 +22,18 @@ enum Cmd {
     GenHowto,
     /// Regenerate the generated regions in `docs/specs/*.md` from types.
     GenSpecs,
-    /// Advance the version ladder (adr/022): mutate both manifests + the
-    /// version-bearing example atoms, then regenerate every derived surface.
-    /// Git is left to the caller (release.yml commits and pushes the result).
+    /// Bump the version everywhere (the human version bump, adr/025): mutate
+    /// both manifests + the version-bearing example atoms, then regenerate
+    /// every derived surface. Git is left to the caller — land the bump as a
+    /// commit in a normal PR; CI never commits to a protected branch.
     Bump {
-        /// Which component to advance: `patch` (nightly merges), `minor`
+        /// Which component to advance: `patch` (routine increment), `minor`
         /// (promotion), `major` (reserved for critical/official changes).
         /// Mutually exclusive with `--to`.
         #[arg(value_enum)]
         part: Option<bump::Part>,
-        /// Land an explicit X.Y.Z (the promotion bot: `main`'s minor+1
-        /// exactly, even when the PR is reopened mid-ladder).
+        /// Land an explicit X.Y.Z (the promotion PR must carry `main`'s
+        /// minor+1 exactly; `guard` checks it).
         #[arg(long, conflicts_with = "part")]
         to: Option<String>,
     },

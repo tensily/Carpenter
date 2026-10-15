@@ -13,6 +13,6 @@
 6. `progress summary`; `notes add` (`related_open` hint); goal/lesson status derives
    from `pass_or_fail` + `skip`.
 7. `skip --scope … <id>` flips a `skip` column (excludes the item from derivation;
-   rendered into the notebook's `_skip_config` cell on next sync).
+   rendered into the notebook's `managed=skip-config` cell on next sync).
 8. `lesson sync` after a DB edit → re-render, learner-filled stubs preserved (3-way
    via `scaffold_hash`).

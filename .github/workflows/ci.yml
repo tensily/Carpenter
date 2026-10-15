@@ -34,7 +34,7 @@ jobs:
             echo "::error::main only accepts merges from the nightly branch (adr/021); got '$HEAD_REF'"
             exit 1
           fi
-      - name: assert the promotion bumps minor exactly (adr/022)
+      - name: assert the promotion bumps minor exactly (adr/025)
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}

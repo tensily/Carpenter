@@ -25,7 +25,6 @@ material. SQLite is the source of truth; notebooks render from it. Read in order
 
 Numbering gaps are merged docs (one concern per file otherwise): **02 stack** →
 [03 → Stack](03-architecture.md#stack); **13 out-of-scope** →
-[01 → Non-goals](01-overview.md#non-goals-yagni). The leftover `02-stack.md` /
-`13-out-of-scope.md` files are redirect stubs pending deletion.
+[01 → Non-goals](01-overview.md#non-goals-yagni).
 
 See also: [data-model/](../data-model/), [specs/](../specs/), [adr/](../adr/).

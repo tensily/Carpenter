@@ -12,11 +12,11 @@
 - [ ] New/changed behavior ships with unit tests (a new command fn lands its
       `#[test]` by construction; other logic gets a case added).
 - [ ] If the CLI surface or study workflow changed:
-      `.opencode/agents/carpenter-dev-validate.md` (the QA agent's
+      `.opencode/agents/qa.md` (the QA agent's
       checklist/prompt) is updated to match in this PR.
 - [ ] No version bump in this PR unless it is release prep — bumps are
       human commits (`cargo xtask bump`, adr/025), never automated.
-- [ ] A **carpenter-dev-validate report** is attached below — **required when
+- [ ] A **QA report** is attached below — **required when
       this PR changes learner-facing or course-building surface** (commands,
       envelope shapes, study workflow, howto contract): the subject-learning
       simulation ran smoothly end to end, verifying existing features **and**
@@ -24,7 +24,7 @@
       one-line `N/A — no course-surface change` plus the targeted contract
       validation that ran instead.
 
-### dev-validate report
+### QA report
 
 <!-- Required for course-surface PRs: paste the report (or its summary) —
       commands audited, failure tally (must show zero bugs), and the

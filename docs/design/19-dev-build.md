@@ -100,7 +100,7 @@ sandbox/skill lifecycle op goes through the CLI.
 | `dev check` | probe prerequisites (uv via `core::exec::uv_available`); `status:ok` + `checks[]`. |
 | `dev setup` | `create_dir_all(./.sandbox)`; idempotent. |
 | `dev clean` | `remove_dir_all(./.sandbox)`; idempotent (`removed:false` if absent). |
-| `dev register` | render the carpenter skill (`core::skill::render()`) and write `.opencode/skills/carpenter/SKILL.md`. The dev analog of release `register` (skill write only — it does **not** touch the tracked `opencode.json`; the dev-validate agent already carries `skill: allow`). |
+| `dev register` | render the carpenter skill (`core::skill::render()`) and write `.opencode/skills/carpenter/SKILL.md`. The dev analog of release `register` (skill write only — it does **not** touch the tracked `opencode.json`; the QA agent already carries `skill: allow`). |
 | `dev upgrade` | `cargo build --features dev` (rebuilds `target/debug/carpenter`) + `dev register` (refresh the local skill). The dev analog of release `upgrade`: rebuild + refresh skill. |
 
 `dev register` / `dev upgrade` reuse the release `Data::Register` / `Data::Upgrade`
