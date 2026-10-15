@@ -355,6 +355,10 @@ pub fn update(
     insert_lesson_content(&conn, id, &spec, &plan)?;
     db::update_lesson_meta(&conn, id, &spec.title, &now)?;
 
+    let status_str = status::lesson_status(&conn, id)?
+        .map(|s| s.as_str().to_string())
+        .unwrap_or(lesson.status);
+
     let dir = lesson_dir(paths, course_slug, &lesson.slug, lesson.ord);
     if dir.exists() {
         let nb = notebook::render_to_string(&conn, id)?;
@@ -367,7 +371,7 @@ pub fn update(
             slug: lesson.slug,
             title: spec.title,
             ord: lesson.ord,
-            status: lesson.status,
+            status: status_str,
             skip: lesson.skip,
             created_at: lesson.created_at,
             updated_at: now,
@@ -1092,6 +1096,35 @@ mod tests {
         assert_eq!(q.id, "q1");
         assert!(q.skip);
         assert_eq!(q.cases[0].id, "c3");
+    }
+
+    #[test]
+    fn update_envelope_reports_derived_status() {
+        let (paths, slug) = testutil::setup();
+        create(&paths, &slug, SPEC).unwrap();
+        {
+            let conn = db::open_course(&paths, &slug).unwrap();
+            conn.execute("UPDATE quizzes SET pass_or_fail=1 WHERE id='q1'", [])
+                .unwrap();
+        }
+        let Data::LessonUpdate { updated, .. } =
+            update(&paths, &slug, "arrays-101", SPEC, true).expect("update")
+        else {
+            panic!();
+        };
+        assert_eq!(
+            updated.status, "in_progress",
+            "1/3 items passing → in_progress"
+        );
+        let conn = db::open_course(&paths, &slug).unwrap();
+        let derived = status::lesson_status(&conn, "arrays-101")
+            .unwrap()
+            .map(|s| s.as_str().to_string())
+            .unwrap_or_default();
+        assert_eq!(
+            updated.status, derived,
+            "envelope must agree with lesson show"
+        );
     }
 
     #[test]
