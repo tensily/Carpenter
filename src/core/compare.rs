@@ -23,6 +23,17 @@ pub enum CompareMode {
     Set,
 }
 
+impl CompareMode {
+    /// The CLI/DB spelling (`exact` | `sorted` | `set`).
+    pub fn as_str(self) -> &'static str {
+        match self {
+            CompareMode::Exact => "exact",
+            CompareMode::Sorted => "sorted",
+            CompareMode::Set => "set",
+        }
+    }
+}
+
 /// A compare error — the case errors (it is not a crash).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CompareError {
