@@ -115,8 +115,10 @@ CREATE TABLE goals (
 );
 CREATE INDEX idx_goals_scope ON goals(scope, scope_id);
 
--- id allocation: one row per prefixed table. `next` only grows, so deleted ids
--- are never reused (the `max+1 over existing rows` alternative would reuse them).
+-- id allocation: one row per prefixed table. `next` only grows across committed
+-- transactions, so deleted ids are never reused (the `max+1 over existing rows`
+-- alternative would reuse them). A rolled-back transaction restores `next` — the
+-- rolled-back id was never attached to a row, so the never-reuse guarantee holds.
 CREATE TABLE id_seq (
   tbl  TEXT PRIMARY KEY,            -- prefixed table name (sections, practice, ...)
   next INTEGER NOT NULL             -- next numeric suffix to hand out

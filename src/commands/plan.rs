@@ -143,8 +143,12 @@ pub fn list(paths: &Paths, course_slug: &str, scope: Option<&str>) -> Result<Dat
 }
 
 /// Confirm a plan (course scope materializes goals from `goals[]` + `links`).
+///
+/// Materialization runs in one transaction: a failed confirm (e.g. an
+/// unresolvable lesson id in `links`) rolls back the goal inserts *and* the
+/// `id_seq` bump, so ids are only consumed by confirms that commit.
 pub fn confirm(paths: &Paths, course_slug: &str, id: &str) -> Result<Data, CarpenterError> {
-    let conn = db::open_course(paths, course_slug)?;
+    let mut conn = db::open_course(paths, course_slug)?;
     let row = db::get_plan(&conn, id)?;
     if row.confirmed_at.is_some() {
         return Err(CarpenterError::Conflict(format!(
@@ -153,18 +157,19 @@ pub fn confirm(paths: &Paths, course_slug: &str, id: &str) -> Result<Data, Carpe
     }
     let now = time::now_iso();
     let mut goals_created = Vec::new();
+    let tx = db::transaction(&mut conn)?;
     if row.scope == "course" {
         let content: PlanContent = serde_json::from_str(&row.content)
             .map_err(|e| CarpenterError::StoreError(format!("plan content unreadable: {e}")))?;
         for (i, text) in content.goals.iter().enumerate() {
-            let gid = db::next_id(&conn, "goals", "g")?;
+            let gid = db::next_id(&tx, "goals", "g")?;
             let covered = content
                 .links
                 .get(&format!("goal_index_{i}"))
                 .cloned()
                 .unwrap_or_default();
             for lid in &covered {
-                if !db::lesson_exists(&conn, lid)? {
+                if !db::lesson_exists(&tx, lid)? {
                     return Err(CarpenterError::ValidationError(format!(
                         "unresolvable lesson id in links: {lid}"
                     )));
@@ -180,11 +185,12 @@ pub fn confirm(paths: &Paths, course_slug: &str, id: &str) -> Result<Data, Carpe
                 override_flag: false,
                 created_at: now.clone(),
             };
-            db::insert_goal(&conn, &goal)?;
+            db::insert_goal(&tx, &goal)?;
             goals_created.push(gid);
         }
     }
-    db::set_plan_confirmed(&conn, id, &now)?;
+    db::set_plan_confirmed(&tx, id, &now)?;
+    db::commit(tx)?;
     Ok(Data::PlanConfirm {
         id: id.into(),
         confirmed: true,
@@ -362,6 +368,23 @@ mod tests {
         confirm(&paths, &slug, &id).unwrap();
         let err = confirm(&paths, &slug, &id).unwrap_err();
         assert!(matches!(err, CarpenterError::Conflict(_)));
+    }
+
+    #[test]
+    fn confirm_failed_confirm_does_not_consume_goal_ids() {
+        let (paths, slug) = testutil::setup();
+        let ghost = "title: t\ngoals: [a, b, c]\nlinks:\n  goal_index_0: [ghost-lesson]\n";
+        let bad = plan_id(&create(&paths, &slug, "course", None, ghost).unwrap());
+        let err = confirm(&paths, &slug, &bad).unwrap_err();
+        assert!(matches!(err, CarpenterError::ValidationError(_)));
+        let good = plan_id(&create(&paths, &slug, "course", None, SPEC).unwrap());
+        let data = confirm(&paths, &slug, &good).expect("confirm after failed confirm");
+        match data {
+            Data::PlanConfirm { goals_created, .. } => {
+                assert_eq!(goals_created, ["g1", "g2"]);
+            }
+            _ => panic!("PlanConfirm"),
+        }
     }
 
     #[test]
