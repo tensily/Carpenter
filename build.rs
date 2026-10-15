@@ -85,6 +85,14 @@ fn main() {
         }
     }
     gate_scenarios(&known, &mut errors);
+    for (verb, key) in SELF_VERBS {
+        if !known.contains(*key) {
+            errors.push(format!(
+                "build.rs SELF_VERBS: `{key}` (self {verb}) is not a known command fn \
+                 — the table drifted from src/commands/"
+            ));
+        }
+    }
     if errors.is_empty() {
         return;
     }
@@ -96,6 +104,24 @@ fn main() {
 
 /// Minimum number of distinct command fns a scenario file must invoke.
 const MIN_DISTINCT_FNS: usize = 3;
+
+/// `self <verb>` → the `<module>::<fn>` key of the install-lifecycle command
+/// fn the umbrella dispatches to (adr/027). Resolves scenario invocations
+/// exactly, where fn-name-suffix matching cannot: `self list` matches ten `list`
+/// fns, `self register` matches two, and `self link` dispatches to a fn named
+/// `register`. MUST stay in sync with the `self_group`/`self_cmd` dispatch in
+/// `src/app.rs` and with `SELF_EXAMPLES` in `xtask/src/howto.rs` (gen-howto's
+/// copy — this build script cannot depend on the xtask crate).
+const SELF_VERBS: &[(&str, &str)] = &[
+    ("install", "install::install"),
+    ("upgrade", "upgrade::upgrade"),
+    ("uninstall", "uninstall::uninstall"),
+    ("register", "register::register"),
+    ("deregister", "deregister::deregister"),
+    ("list", "installs::list"),
+    ("remove", "installs::remove"),
+    ("link", "link::register"),
+];
 
 /// Global value-taking flags whose following argument must be skipped when
 /// parsing `carpenter` invocations. (Boolean globals like `--version` need no
@@ -173,8 +199,9 @@ fn gate_scenarios(known: &HashSet<String>, errors: &mut Vec<String>) {
 /// Parse one `carpenter …` line into a `<group>::<fn>` (or `<name>::<name>` for
 /// a top-level command) key. Returns `None` for non-invocations / empty lines.
 /// A second token resolves as a subcommand only when `<t0>::<t1>` is a known
-/// command fn; otherwise the line is treated as a top-level fn with its
-/// positional argument (e.g. `skip q1 --scope quiz`, `build /courses/ds`).
+/// command fn (`self <verb>` resolves through [`SELF_VERBS`]); otherwise the
+/// line is treated as a top-level fn with its positional argument (e.g.
+/// `skip q1 --scope quiz`, `build /courses/ds`).
 fn parse_invocation(line: &str, known: &HashSet<String>) -> Option<String> {
     let toks: Vec<&str> = line.split_whitespace().collect();
     if toks.first() != Some(&"carpenter") {
@@ -189,15 +216,13 @@ fn parse_invocation(line: &str, known: &HashSet<String>) -> Option<String> {
         }
         // The `self` umbrella (adr/027): `carpenter self <verb>` dispatches to
         // the install-lifecycle command fns that live in their own modules
-        // (upgrade::upgrade, installs::list, link::register, …). Resolve by
-        // unique fn-name suffix across the known set.
+        // (upgrade::upgrade, installs::list, link::register, …). Resolve via
+        // the explicit verb map — fn-name-suffix matching cannot disambiguate
+        // `self list` (ten `list` fns) or resolve `self link` (fn `register`).
         if t0 == "self" {
-            let matches: Vec<&String> = known
-                .iter()
-                .filter(|k| k.rsplit_once("::").is_some_and(|(_, f)| f == *t1))
-                .collect();
-            if matches.len() == 1 {
-                return Some((*matches[0]).clone());
+            let verb = *t1;
+            if let Some((_, key)) = SELF_VERBS.iter().find(|(v, _)| *v == verb) {
+                return Some((*key).to_string());
             }
         }
     }

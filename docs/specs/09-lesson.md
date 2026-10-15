@@ -11,7 +11,7 @@
 | `delete <id> --force` | — | `{"id":"arrays-101","deleted":true}` — `Conflict` without `--force` |
 | `sync <id> [--force]` | — | `{"id":"arrays-101","synced":true,"conflicts":[{"id":"p1","reason":"db_changed"}]}` — `conflicts[].reason` ∈ `learner_edited`\|`db_changed` |
 | `execute <id> [--allow-errors]` | — | `{"id":"arrays-101","executed":true,"cells":{"total":3,"ran":3,"errored":0},"errors":[]}` — strict (default) ⇒ `ExecuteError` on first scaffolding error; `--allow-errors` lists `errors[]` |
-| `verify (<id> | --spec -) [--timeout <SECS>]` | LessonSpec (--spec) | — (<id>) | `{"lesson_id":"arrays-101","checked":1,"passing":1,"failing":0,"checkables":[{"owner_type":"practice","owner_id":"p1","name":"sum_array","has_solution":true,"passed":1,"total":1,"cases":[{"case_id":"c1","passed":true}]}]}` — runs each author `solution` vs its own cases; `--spec` is the pre-create key-lock, `<id>` re-verifies stored solutions |
+| `verify (<id> \| --spec -) [--timeout <SECS>]` | LessonSpec (--spec) \| — (<id>) | `{"lesson_id":"arrays-101","checked":1,"passing":1,"failing":0,"checkables":[{"owner_type":"practice","owner_id":"p1","name":"sum_array","has_solution":true,"passed":1,"total":1,"cases":[{"case_id":"c1","passed":true}]}]}` — runs each author `solution` vs its own cases; `--spec` is the pre-create key-lock, `<id>` re-verifies stored solutions |
 | `new [--out <FILE>]` | — | `{"yaml":"title: …\nsections: []\n"}` — emits a YAML lesson-spec template (block scalars + `solution`); stdout, or `--out` to write |
 <!-- END GENERATED -->
 
