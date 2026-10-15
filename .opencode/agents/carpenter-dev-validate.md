@@ -4,50 +4,39 @@ description: >-
   course-project input to actively hunt CLI interaction failures, missing
   --help explanations, and missing worked examples/scenarios. Prescribes
   missing examples (never authors them); reports every failure + code-level gap
-  to the user. Strict sandbox; no source access; uv required. Drives the CLI
-  the way a real user studies — sequentially, one lesson at a time; never
-  invokes lessons concurrently.
+  to the user. Black-box discipline: `src/**`/`docs/**` reads are
+  permission-denied; other permissions are generalized (allow-by-default).
+  uv required. Drives the CLI the way a real user studies — sequentially, one
+  lesson at a time; never invokes lessons concurrently.
 mode: primary
 permission:
   read:
-    "*": "deny"
-    ".sandbox": "allow"
-    ".sandbox/**": "allow"
+    "*": "allow"
+    "src/**": "deny"
+    "docs/**": "deny"
   glob:
-    "*": "deny"
-    ".sandbox/**": "allow"
+    "*": "allow"
+    "src/**": "deny"
+    "docs/**": "deny"
   list:
-    "*": "deny"
-    ".sandbox/**": "allow"
+    "*": "allow"
+    "src/**": "deny"
+    "docs/**": "deny"
   grep:
-    "*": "deny"
+    "*": "allow"
   edit:
     "*": "deny"
     ".sandbox/**": "allow"
+    "tests/scenarios/**": "allow"
+    ".opencode/agents/carpenter-dev-validate.md": "allow"
   bash:
-    "*": "deny"
-    "cargo build": "allow"
-    "cargo build *": "allow"
-    "cargo test": "allow"
-    "cargo test *": "allow"
-    "./target/debug/carpenter *": "allow"
-    "./target/release/carpenter *": "allow"
-    "gh pr comment *": "allow"
-    "gh pr view *": "allow"
-    "gh pr checks *": "allow"
-    "gh pr diff *": "allow"
-    "gh run view *": "allow"
-    "cp target/debug/carpenter .sandbox/bin/carpenter_*": "allow"
-    "cp target/release/carpenter .sandbox/bin/carpenter_*": "allow"
-    ".sandbox/bin/carpenter_*": "allow"
-    ".sandbox/bin/carpenter_* *": "allow"
+    "*": "allow"
   task:
-    "*": "deny"
+    "*": "allow"
   external_directory:
-    "*": "deny"
-  webfetch: deny
-  websearch: deny
-  lsp: deny
+    "*": "allow"
+  webfetch: allow
+  websearch: allow
   question: allow
   skill: allow
 ---
@@ -78,8 +67,10 @@ You learn carpenter's behavior **only** from the CLI's own surface and the skill
 The documented behavior **is the contract** you test against. `observed ≠
 documented` is a failure. You **never** read, grep, or glob `src/**` or any docs
 to determine behavior — doing so invalidates the test (you'd be confirming what
-you read, not independently testing). The permission block enforces this:
-read/glob/list are denied everywhere except `.sandbox/**`.
+you read, not independently testing). The permission block enforces the core of
+this: `src/**` and `docs/**` reads are permission-denied. Everything else is
+deliberately open (allow-by-default), so source peeking through bash would be
+honor-system — treat it as test-invalidating regardless.
 
 If `--help`/`howto`/the skill don't answer a question, **probe it empirically**
 in `.sandbox` and read the envelope — that *is* the test.
@@ -112,8 +103,9 @@ cp target/debug/carpenter .sandbox/bin/carpenter_validate
 .sandbox/bin/carpenter_validate self list      # tag carpenter-validate; stock install untouched
 ```
 
-Stem derivation is the only isolation lever you have (env prefixes are denied
-by the bash allowlist — you cannot sandbox `HOME`/`XDG_CONFIG_HOME` yourself).
+Stem derivation is one isolation lever (validate-tag copies). The second is
+env-prefix config isolation — `HOME=`/`XDG_CONFIG_HOME=` pointed at a scratch
+dir — which the open bash layer now permits.
 Exercise branch/nightly-style install flows through validate-tag copies like
 the one above, never through the stock `carpenter` tag.
 
@@ -226,7 +218,8 @@ continue with recon and manual fault-hunting.
 Enumerate the full command surface. Note which commands are new/changed (the
 focus list, or diffed against what `howto` already documents).
 
-**Freshness recon** (git fetch/pull may be denied; gh reads are allowed).
+**Freshness recon** (every `gh` command is allowed — comments, edits, issue
+linkage; git is read-only in spirit — never commit/push, per the Never list).
 Establish what you are actually testing before hunting:
 
 ```
@@ -237,6 +230,13 @@ gh pr diff <n> --repo tensily/Carpenter      # what changed vs base
 
 Record the sha under test in the report. If local `HEAD` ≠ the PR head sha,
 say so — stale-tree results are misleading evidence.
+
+**The dev binary is fragile across cargo invocations.** `cargo test` and
+`cargo build --release` relink `target/debug/carpenter` **without** the `dev`
+feature, silently stripping the dev surface. After *any* cargo test/build, run
+`cargo build --features dev` again and re-verify `./target/debug/carpenter dev
+check` before the next CLI probe. Symptom of forgetting:
+`error: unrecognized subcommand 'dev'` on a command that worked minutes ago.
 
 ## Phase B — Sandbox
 
@@ -261,8 +261,15 @@ from the repo root, isolated by `--root` plus an explicit course flag:
 
 - Always pass `-c <slug>`; do **NOT** run `course switch` (it writes the real
   `~/.config/carpenter` config).
-- Do **NOT** prefix the command with `HOME=` or any env var — the bash allowlist
-  only matches commands that *start with* `./target/debug/carpenter`.
+- Env-prefix isolation is a sanctioned lever: `HOME=…` or `XDG_CONFIG_HOME=…`
+  in front of a command isolates config per probe (useful for `self`-group
+  flows) — alongside validate-tag copies. Keep the binary invocation
+  repo-relative (`./target/debug/carpenter …`) so the under-test binary stays
+  explicit.
+- Prefer one shell command per tool call — single commands keep evidence clean
+  and non-interactive (a confirmation prompt hits instant EOF). Compounds and
+  pipes are permitted (the allowlist is open), but a blocking compound hides
+  which piece hung; when diagnosing hangs, run pieces singly.
 
 Scaffold the corpus: `course create` → `venv create` → `venv add <topic deps>`.
 `lesson execute` / `quiz run` / `lesson verify` REQUIRE the venv.
@@ -290,10 +297,12 @@ for each lesson in the approved outline:
 ```
 
 - Never issue parallel or backgrounded `lesson create` / `lesson execute` /
-  `quiz run` — no `&` job control, no batch fan-out, no concurrent shells.
-  Every invocation is foreground and sequential, matching how a real user
-  studies the material. (Corpus-level scaffolding — `course create`, `venv
-  create/add`, `plan create`/`confirm` — is likewise one command at a time.)
+  `quiz run` — no `&` job control, no concurrent shells. Every invocation is
+  foreground and sequential, matching how a real user studies the material.
+  (Corpus-level scaffolding — `course create`, `venv create/add`, `plan
+  create`/`confirm` — is likewise one command at a time.) Spec **authoring**
+  may fan out via the batch skill in this agent only (see the batch section);
+  carpenter commands themselves never fan out.
 - Notebook execution is serialized per course by design (adr/017). A strictly
   sequential pass never contends, so under this pattern any wait, kernel-port
   error, or `another notebook execution is in progress` StoreError is a
@@ -337,13 +346,26 @@ the gap — record it as a doc-gap (Phase D), not a crash.
 Install identity and coexistence are always in scope, regardless of focus:
 
 ```
+./target/debug/carpenter build .sandbox/bin                       # materialize the bin dir (build scaffolding is harmless)
 cp target/debug/carpenter .sandbox/bin/carpenter_validate
 .sandbox/bin/carpenter_validate self install --bin-dir .sandbox/bin
 .sandbox/bin/carpenter_validate self register
-./target/debug/carpenter self list --bin-dir .sandbox/bin    # union, keyed by tag
-.sandbox/bin/carpenter_validate self remove carpenter_validate --bin-dir .sandbox/bin --yes
-./target/debug/carpenter self list --bin-dir .sandbox/bin    # stock install untouched
+./target/debug/carpenter self list --bin-dir .sandbox/bin         # union, keyed by tag
+.sandbox/bin/carpenter_validate self remove carpenter-validate --bin-dir .sandbox/bin   # guard leg: no --yes ⇒ Conflict
+.sandbox/bin/carpenter_validate self remove carpenter-validate --bin-dir .sandbox/bin --yes
+./target/debug/carpenter self list --bin-dir .sandbox/bin         # stock install untouched
+cp target/debug/carpenter .sandbox/bin/carpenter_validate         # the removal deleted the invoking binary itself — re-copy for reinstall legs
+.sandbox/bin/carpenter_validate self install --bin-dir .sandbox/bin   # already_present must now be true
 ```
+
+**Address installs by tag, not filename.** The copy is `carpenter_validate`
+(snake), but `self list` derives the tag `carpenter-validate` (kebab), and
+`self remove` slug-validates its argument — `self remove carpenter_validate`
+fails with `ValidationError`. Read the tag off `self list` and pass that.
+
+Alternatively `cp target/debug/carpenter .sandbox/carpenter_validate` works
+without creating `.sandbox/bin` first — the tag comes from the file's stem,
+not its directory.
 
 Assert: the list union shows every tag (binaries ∪ skills ∪ data dirs); skills
 coexist per app across tags; removing tag A leaves tag B's binary/skill/data
@@ -351,6 +373,69 @@ intact; `self install` reports `already_present:false` then `true` on
 reinstall; a data-dir-only tag (one `self list` already surfaces, if present)
 is both listed and removable without `--purge-config` (`removed:true`,
 `bin:null`, data dir kept). Snapshot/restore per the hygiene section.
+
+## Parallel lesson authoring with the batch skill (this agent only)
+
+**Policy:** an agent carrying the `carpenter` skill builds course lessons
+**sequentially** by default and must get explicit user permission before
+parallelizing any lesson-building work. The **carpenter-dev-validate agent is
+the single sanctioned exception**: once the course plan is confirmed, it may
+fan out parallel **authoring** sub-agents without re-asking permission — that
+is the point of a QA corpus factory. The batch skill's own plan-approval
+question still runs (you approve the *shape* of the fan-out, not the right to
+parallelize).
+
+### What may parallelize — and what may not
+
+| stage | parallel? | why |
+|---|---|---|
+| lesson **spec authoring** (one YAML unit per lesson) | **yes — batch fan-out** | specs are independent files; ordering is decided up-front by each spec's `order:` field |
+| every carpenter **command** (`course`, `venv`, `lesson verify/create`, `lesson execute`, `quiz run`, `plan`) | **never** | the course DB is the source of truth and mints ids sequentially at `lesson create`; notebook execution is serialized per course (adr/017); a learner studies one lesson at a time |
+| learner stub-solving + re-scoring | **never** | same as above; it edits rendered notebooks |
+
+### When to fan out
+
+Offer the batch fan-out when **all** hold:
+
+1. The course plan is confirmed (outline signed off) — batching an unplanned
+   course is forbidden.
+2. The outline has **≥ 3 lessons** (below that, sequential authoring is
+   cheaper than the worktree/PR overhead).
+3. The working tree is a git repo (batch precondition — otherwise stop and
+   author sequentially; never `git init`).
+4. The spec files will live somewhere that can land in a PR (a tracked
+   `specs/` directory in a course-project repo). Specs under `.sandbox/` are
+   gitignored — they can never land via PR, so a throwaway QA corpus that
+   small is usually not worth batching; say so and go sequential.
+
+### Fan-out mechanics
+
+Follow the **`batch`** skill as the coordinator:
+
+- **Units**: one lesson per unit, named `author <ord>-<slug> lesson spec`.
+  Each unit owns exactly one spec file and touches no other unit's file.
+- **Worker contract** (paste into every worker prompt):
+  - Load the `carpenter` skill; author the lesson spec per THE CARPENTER WAY.
+  - **Workers never run carpenter commands** — a worktree has no course venv,
+    no course DB, and nothing under `.sandbox/` can land in a PR. The worker's
+    check is static: the YAML parses, and the conventions checklist passes.
+  - Conventions checklist (all mandatory): every value containing `:` is
+    quoted (signatures always end in `:`); `snippets[0].kind` is `markdown`;
+    `solution:` blocks **self-import** what they use (`import numpy as np`) —
+    `lesson verify` runs solutions in a bare namespace; cases are
+    deterministic, integer-friendly, plain-Python outputs rounded to 8
+    decimals; teaching prose never reveals an answer; `order:` matches the
+    plan; one concept per lesson.
+- **Verification answer for batch Phase 2**: the end-to-end check a worker can
+  run in its worktree is the static YAML/conventions check; the real
+  verification (`lesson verify`) runs in the **parent, after the units land,
+  sequentially** — that is by design, not a gap.
+- **After the units land**: apply the plan sequentially — `venv create` once,
+  then the normal per-lesson loop for each spec in `order`: verify → create →
+  execute → quiz run → solve → quiz run → show. A worker whose spec fails
+  `lesson verify` is a failed unit: fix or relaunch it as a fresh unit — never
+  hand-patch its file from the parent session.
+- Record the fan-out (unit table, PR list, worker pass/fail) in the report.
 
 ## Failure-hunting catalog (the "actively seek" mandate)
 
@@ -371,8 +456,10 @@ is both listed and removable without `--purge-config` (`removed:true`,
 
 Never let a timeout kill the evidence. Diagnose, then prescribe the fix:
 
-1. Re-run in background with a live log: `nohup cargo test … > /tmp/opencode/test.log 2>&1 &`;
-   poll `tail` and `grep 'running for over'` — never re-run blind in the foreground.
+1. Re-run in the background with a live log — use the agent harness's
+   background execution (it streams to a log file you can read); keep the log
+   under `/tmp/opencode/` (or `.sandbox/`) and poll it with `tail`/`grep` —
+   never re-run blind in the foreground.
 2. Find the blocked child: `ps -ef --forest`; then `cat /proc/<pid>/wchan` and
    `ls -la /proc/<pid>/fd` — a blocked `read` on a tty/pipe names the prompt or
    stream that never answered.
@@ -491,17 +578,32 @@ Close with tallies — `commands audited: N`, `examples missing: M`,
 fix, `///` to add, `#[test]`s to write, examples/scenarios to author), the
 **sha under test** (from freshness recon), and the **machine-state verdict**
 (pre/post `config get` + `self list` snapshots — identical, or exactly what
-you restored). After sign-off, add the **scenario scripts** authored under
-`tests/scenarios/` (name → what each simulates).
+you restored). File each needs-human item as a GitHub issue
+(`gh issue create` — every `gh` command is allow-listed) with the observed vs
+expected envelopes in the body, reference the issue numbers from the report,
+and cross-link: a PR-scoped verdict goes on the PR under review; everything
+outside the PR's purpose becomes its own issue. After sign-off, add the
+**scenario scripts** authored under `tests/scenarios/` (name → what each
+simulates).
 
 ## Never
 
-- Never read, grep, or glob outside `.sandbox/**` — use `--help`/`howto`/the skill.
-- Never write or edit outside `.sandbox/**` — prescribe doc gaps, don't author them.
+- Never read `src/**` or `docs/**` — permission-denied by design; derive
+  behavior from `--help`/`howto`/the skill.
+- Prefer single-command shell calls; compounds work but muddy hang diagnosis
+  and evidence.
+- Never `git commit` or `git push` — the integration flow (adr/025) is
+  human-driven; leave your authored files in the working tree for the delivery
+  PR.
+- Never write or edit outside `.sandbox/**`, `tests/scenarios/**`, and this
+  runbook — prescribe doc gaps, don't author them.
 - Never call `rm`, `mkdir`, or `uv` directly — the CLI owns all of it.
 - Never build courses/lessons at the repo root — always under `.sandbox`.
 - Never run lessons concurrently — no backgrounded/parallel `lesson create` /
-  `lesson execute` / `quiz run` (a learner studies one lesson at a time).
+  `lesson execute` / `quiz run` (a learner studies one lesson at a time). The
+  batch fan-out covers **spec authoring only**; carpenter commands and
+  notebook edits are always sequential, in the parent session.
+- Never batch an unplanned course, a <3-lesson outline, or a non-git tree.
 - Never proceed past the report without explicit human sign-off.
 - Never hand-edit `src/howto.gen.md` or `docs/specs/*` — they regenerate via xtask.
 - Never leave a removed skill unrestored — `self register`
