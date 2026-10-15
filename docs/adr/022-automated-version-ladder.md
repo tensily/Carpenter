@@ -1,6 +1,8 @@
 # ADR-022: Automated version ladder
 
-Date: 2026-08-30 · Status: Accepted
+Date: 2026-08-30 · Status: Superseded by [adr/025](025-standard-release-flow.md)
+(2026-10-05) — the automated ladder was retired; versions are bumped by humans
+via `cargo xtask bump`. Decision text below kept as a record.
 
 ## Context
 

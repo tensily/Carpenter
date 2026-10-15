@@ -1,13 +1,14 @@
 # App-level config (`~/.config/carpenter/`)
 
 Not per-course. Lives under the OS config dir (`~/.config/carpenter` Linux,
-`~/Library/Application Support/carpenter` macOS, `%APPDATA%\carpenter` Windows — resolved
-by `dirs`; `bin_dir` default + binary name are per-OS via `core/platform.rs`, see
+`~/Library/Application Support/carpenter` macOS — resolved by `dirs` via
+`store::config_dir`; the `bin_dir` default comes from `Config::default`
+(`src/core/config.rs`), the binary name from `store::binary_file_name` — see
 [design/17](../design/17-cross-platform.md) and
 [adr/012](../adr/012-cross-platform-paths.md)).
 
 ```
-config.json                # {bin_dir, python, timeout_secs, active_course?}
+config.json                # {bin_dir, python, timeout_secs, active_course?, source_dir?}
 bug/<id>.json              # {id,ts,title,description,repro,stack?,status,resolved_ts?}
 feature_request/<id>.json  # {id,ts,title,description,rationale,status,resolved_ts?}
 ```

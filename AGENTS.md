@@ -17,18 +17,21 @@ build.rs      syn-scan commands/ -> fail build if a command fn lacks docs/tests;
               also gate examples/*.md scenarios (>=3 distinct fns each; adr/013)
 app.rs        clap wiring + emit harness. No logic.
 manual.rs     howto text = include_str!("howto.gen.md") (xtask-produced)
-core/         store · db · compare · notebook · helper · skill · status · output · error
+core/         store · db · compare · notebook · helper · skill · status · output ·
+              error · bugfile · config · confirm · exec · installs · reconcile ·
+              release · time · verify (· dev, behind the feature flag)
 models/       serde structs (Data enum = one variant per command; *Spec types)
 commands/     ONLY command fns (helpers live in core/)
 examples/     scenario files (one multi-command workflow each; .md only)
-xtask/        gen-howto · gen-specs · build  (codegen pipelines)
+xtask/        gen-howto · gen-specs · build · bump  (codegen pipelines)
 ```
 
 Request flow: `clap` parse → `app::run` resolves `Paths` + the active course →
 dispatches to a `commands::*` fn → the command returns `Result<Data,
-CarpenterError>` → `app::emit` wraps **one** JSON envelope on stdout (ok → exit 0,
-error → exit 1). Spec parsing is centralized in the `_emit` path, so a bad
-`--spec` maps to a `ValidationError` envelope, not a crash.
+CarpenterError>` → `app::run` renders **one** JSON envelope on stdout via
+`core::output::render` (ok → exit 0, error → exit 1). `--spec` is read per
+dispatch arm via `store::read_spec`, so a bad `--spec` maps to a
+`ValidationError` envelope, not a crash.
 
 Project layout:
 
@@ -39,7 +42,7 @@ src/
   models/       serde Data/Spec structs + co-located `examples`
   commands/     one module per command group (command fns only)
   howto.gen.md  generated — never hand-edit
-xtask/          gen-howto, gen-specs, build
+xtask/          gen-howto, gen-specs, build, bump
 docs/
   design/       architecture + rationale (read a section as one chunk)
   data-model/   ER, DDL, conventions, status derivation
@@ -83,9 +86,11 @@ RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --workspace
 `[package]`), so bare `cargo test`/`clippy` skip the `xtask` crate and its
 stale-check tests. `cargo doc` rejects `-- -D warnings` in this toolchain, so
 the deny flag goes via `RUSTDOCFLAGS`.
-Pre-commit lint hook (per clone): `git config core.hooksPath .githooks` —
-`.githooks/pre-commit` runs `cargo fmt --all -- --check` when Rust files are
-staged (clippy/tests stay in CI). Guarded by `pre_commit_hook_is_present_and_executable`.
+Pre-commit hook (per clone): `git config core.hooksPath .githooks` —
+`.githooks/pre-commit` gates the branch name against the adr/027 install-tag
+convention (kebab-case segments joined by `/`; `main`/`nightly` exempt) and
+runs `cargo fmt --all -- --check` when Rust files are staged (clippy/tests
+stay in CI). Guarded by `pre_commit_hook_is_present_and_executable`.
 `cargo build` is self-documenting by construction:
 - `#![deny(missing_docs)]` — every public item needs a `///` (clap reads it as `--help`).
 - `build.rs` (syn scan) — every command fn needs a worked-example file at
@@ -110,7 +115,8 @@ Rationale: [adr/007](docs/adr/007-compile-enforced-command-docs.md),
 CI (`.github/workflows/ci.yml`) mirrors these gates on an
 `ubuntu-latest`/`macos-14` matrix (the two supported OSes —
 [design/17](docs/design/17-cross-platform.md),
-[adr/012](docs/adr/012-cross-platform-paths.md)) — `rust-toolchain.toml`
+[adr/012](docs/adr/012-cross-platform-paths.md)) — plus
+`shellcheck scripts/install.sh` — `rust-toolchain.toml`
 pins stable and `uv` is installed. Releases (`.github/workflows/release.yml`)
 are branch-governed channels ([adr/021](docs/adr/021-nightly-main-channels.md))
 in the standard human-bump shape ([adr/025](docs/adr/025-standard-release-flow.md)):
@@ -220,7 +226,8 @@ golfed.
   `thiserror` for errors. No `unwrap`/`expect` outside tests; use `?` and typed
   `CarpenterError`.
 - **Layering:** `app.rs` = wiring only. Commands return `Result<Data,
-  CarpenterError>`; `_emit` wraps one envelope. Commands never touch SQL except
+  CarpenterError>`; `app::run` renders one envelope via `core::output::render`.
+  Commands never touch SQL except
   via `core/db.rs`. `commands/` holds **only** command fns (helpers live in
   `core/`) — build.rs scans by signature, so a helper there with the right
   signature breaks the build. One compare module (`core/compare.rs`); helper's
@@ -232,8 +239,8 @@ golfed.
   `helper.py` is stdlib-only (no venv needed). See `docs/design/16-execution.md`.
 - **Paths:** per-OS — `config_dir` via `dirs` (`~/.config` Linux, `~/Library/…`
   macOS); `bin_dir` default `~/.local/bin` from `dirs::home_dir()`. `dirs` is
-  the only platform surface — zero `#[cfg]` in the codebase (Linux/macOS only;
-  Windows unsupported). See `docs/design/17-cross-platform.md`,
+  the only platform surface — zero platform `#[cfg]` in `src/` (Linux/macOS
+  only; Windows unsupported). See `docs/design/17-cross-platform.md`,
   `docs/adr/012-cross-platform-paths.md`.
 - **IDs:** stable strings (`s1`, `p1`, `q1`, …), not SQLite rowids. See
   `docs/data-model/`.

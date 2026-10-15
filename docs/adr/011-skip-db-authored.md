@@ -36,3 +36,6 @@ Status derivation: `lessons.skip=1` ⇒ lesson status `skipped`; non-skipped ite
 − The "function at the top of the notebook" the learner sees is a *mirror*, not the
   source — editing it directly does nothing (overwritten on sync). Mitigated by it
   being a read-only helper over the DB; the learner edits skip via the CLI.
+
+*(Revision 2026-10-15: the rendered helper fn is `is_skipped(target)` (delegating
+to the helper); the `_skip_config()` name in the decision text is historical.)*

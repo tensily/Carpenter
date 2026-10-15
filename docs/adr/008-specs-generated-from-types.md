@@ -11,7 +11,7 @@ reliable single source to generate the specs from.
 
 ## Decision
 `xtask gen-specs` generates every envelope/spec **table** in-place inside
-`docs/specs/*.md` (target state; see "Current status" below):
+`docs/specs/*.md`:
 - **spec inputs** (02–07) from the `*Spec` serde structs — serialize → example YAML
   + a field table. ([adr/014](014-yaml-spec-input.md): specs are YAML-only; the
   spec-input examples serialize via `serde_yml`, output-contract examples stay JSON.)
@@ -31,19 +31,19 @@ description) alongside a machine-faithful table. Pure-prose files with no genera
 region: `01-envelope`, `20-helper-contract`.
 
 `howto.gen.md` stays whole-file generated. The marker regions join it on the
-**never hand-edit** list; `cargo xtask build` regenerates them; CI fails on drift
-(`git diff --exit-code`).
+**never hand-edit** list; `cargo xtask build` regenerates them; drift fails
+`cargo test` (see Current status).
 
 This **supersedes** the adr/003 consequence that "detailed JSON I/O contracts live in
 `docs/specs/` (human-maintained)."
 
-### Current status (honest)
-The generator does not exist yet — there is no `xtask`, no `Data` enum, no `*Spec`
-structs. **Today every spec table is hand-maintained** and only `19-howto.md`
-actually carries the `BEGIN/END GENERATED` markers. The marker regions + the
-generator land together in build-order phase 2; until then this ADR describes the
-target, not the present. CI drift enforcement on spec markers is enabled when the
-generator ships.
+### Current status
+Shipped: `xtask gen-specs` generates every spec table in-place between the
+markers; all specs except the pure-prose `01-envelope` and `20-helper-contract`
+carry a `<!-- BEGIN GENERATED -->`…`<!-- END GENERATED -->` region. Drift is
+caught inside `cargo test` (not `git diff` in CI): `howto_gen_md_is_fresh` and
+`specs_marker_regions_are_fresh` regenerate each surface to a buffer and assert
+byte-equality with the committed file.
 
 ## Consequences
 + Specs can no longer drift from code — the typed `*Spec`/`Data` shapes **are** the

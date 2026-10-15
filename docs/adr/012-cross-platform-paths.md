@@ -41,7 +41,7 @@ a clear error. Unlink/rename of a running binary (upgrade, uninstall
 self-delete) is relied upon — valid on Linux and macOS only.
 
 ## Consequences
-+ Zero `#[cfg]` in the codebase; `dirs` is the single chokepoint for per-OS
++ Zero platform `#[cfg]` in `src/`; `dirs` is the single chokepoint for per-OS
   behavior.
 + The DB is the source of truth regardless of OS — `course.db`, `config.json`,
   and the lesson layout (`<course>/lessons/<NN>-<slug>/`) are relative paths;

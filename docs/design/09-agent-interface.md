@@ -5,8 +5,9 @@
 {"status":"ok","message":"...","data":{}}
 {"status":"error","message":"...","code":"NotFound","details":{}}
 ```
-Commands never raise to caller. Spec parsing is centralized in the `_emit` path so
-a bad spec maps to a `ValidationError` envelope (not a crash). `code` = error
+Commands never raise to caller. `--spec` is read per dispatch arm via
+`store::read_spec`, so a bad spec maps to a `ValidationError` envelope (not a
+crash). `code` = error
 variant name. List/show surface corrupt rows in `errors[]` (never silent skip).
 Specs via `--spec <file>|-` (stdin). Reused shapes (`errors[]`, `updated:{…}`,
 `conflicts[]`) and the `--force` policy live in

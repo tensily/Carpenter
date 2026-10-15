@@ -7,7 +7,7 @@ App-level config (`~/.config/carpenter/config.json`). Valid keys (unknown key �
 |-----|------|---------|------|
 | `bin_dir` | string | `~/.local/bin` | where `install` places the binary |
 | `python` | string | uv's default | passed to `venv create` when `--python` omitted |
-| `timeout_secs` | int | `30` | per-cell execution timeout |
+| `timeout_secs` | int | `30` | stored/reserved key — round-trips through `get`/`set`; live per-command execution timeouts come from the clap `--timeout` flag (default 30s), not this value |
 | `active_course` | string? | — | current course slug (set by `course switch`) |
 | `source_dir` | string? | — | carpenter source checkout (used by `upgrade` to resolve `--source`) |
 
