@@ -154,9 +154,9 @@ when the model landed (adr/021's PR merged into `nightly`).
   releases, not to develop on.
 - **PR ground rules** (into `nightly`;
   `.github/PULL_REQUEST_TEMPLATE.md`): unit tests green; new features ship with
-  unit tests; `.opencode/agents/carpenter-dev-validate.md` updated when the CLI
+  unit tests; `.opencode/agents/qa.md` updated when the CLI
   surface/study workflow moves; the PR explains the feature; a
-  carpenter-dev-validate report (learning simulation smooth over existing +
+  QA report (learning simulation smooth over existing +
   new features) is attached. `CODEOWNERS` (`* @meolord29`) + branch protection
   make every nightly merge owner-approved.
 - **Merge green or don't merge**: ci.yml must pass on the branch head; rebase

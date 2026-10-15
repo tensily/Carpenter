@@ -70,7 +70,7 @@ Two build stages, surfaced as `cargo xtask build --dev` and `cargo xtask build
    `.opencode/` instead of global `~/.config/opencode/`) and the *build*
    (`--features dev` instead of `--release`). `dev register` writes the skill
    only (it does not merge permission into the tracked `opencode.json` — the
-   dev-validate agent already carries `skill: allow`). Same semantics across
+   QA agent already carries `skill: allow`). Same semantics across
    stages; `.opencode/skills/carpenter/` is gitignored (machine-specific
    `current_exe` path).
 

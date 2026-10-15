@@ -28,7 +28,7 @@ permission:
     "*": "deny"
     ".sandbox/**": "allow"
     "tests/scenarios/**": "allow"
-    ".opencode/agents/carpenter-dev-validate.md": "allow"
+    ".opencode/agents/qa.md": "allow"
   bash:
     "*": "allow"
   task:
@@ -378,7 +378,7 @@ is both listed and removable without `--purge-config` (`removed:true`,
 
 **Policy:** an agent carrying the `carpenter` skill builds course lessons
 **sequentially** by default and must get explicit user permission before
-parallelizing any lesson-building work. The **carpenter-dev-validate agent is
+parallelizing any lesson-building work. The **QA agent is
 the single sanctioned exception**: once the course plan is confirmed, it may
 fan out parallel **authoring** sub-agents without re-asking permission — that
 is the point of a QA corpus factory. The batch skill's own plan-approval

@@ -132,10 +132,10 @@ verified by the owner at review):
 1. All unit tests pass.
 2. New features ship with unit tests.
 3. If the CLI surface or study workflow changed, the QA agent's
-   checklist/prompt (`.opencode/agents/carpenter-dev-validate.md`) is updated
+   checklist/prompt (`.opencode/agents/qa.md`) is updated
    in the same PR.
 4. The PR explains what the feature does.
-5. A carpenter-dev-validate report is attached when the PR changes
+5. A QA report is attached when the PR changes
    learner-facing or course-building surface — the learning simulation ran
    smoothly over existing features and any new ones. Infra/docs/release-process
    PRs record an `N/A — no course-surface change` with the targeted contract
