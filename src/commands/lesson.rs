@@ -37,6 +37,8 @@ fn validate_lesson_spec(spec: &LessonSpec) -> Result<(), CarpenterError> {
     Ok(())
 }
 
+/// Dedup a *derived* slug (`<base>-2`, `-3`, …). Provided slugs are never
+/// uniquified — `create` errors with `AlreadyExists` on those instead.
 fn unique_lesson_slug(conn: &rusqlite::Connection, base: &str) -> Result<String, CarpenterError> {
     if !db::lesson_slug_taken(conn, base)? {
         return Ok(base.to_string());
@@ -207,14 +209,16 @@ pub fn create(paths: &Paths, course_slug: &str, spec_text: &str) -> Result<Data,
     validate_lesson_spec(&spec)?;
     let conn = db::open_course(paths, course_slug)?;
     let now = time::now_iso();
-    let base = match &spec.slug {
+    let slug = match &spec.slug {
         Some(s) => {
             store::validate_slug(s)?;
+            if db::lesson_slug_taken(&conn, s)? {
+                return Err(CarpenterError::AlreadyExists(format!("lesson {s}")));
+            }
             s.clone()
         }
-        None => store::slugify(&spec.title)?,
+        None => unique_lesson_slug(&conn, &store::slugify(&spec.title)?)?,
     };
-    let slug = unique_lesson_slug(&conn, &base)?;
     let lesson_id = slug.clone();
     let ord = match spec.order {
         Some(o) => {
@@ -830,17 +834,33 @@ mod tests {
     }
 
     #[test]
-    fn create_dedups_slug_on_collision() {
+    fn create_duplicate_provided_slug_already_exists() {
         let (paths, slug) = testutil::setup();
         create(&paths, &slug, SPEC).unwrap();
-        // Same slug, no explicit order: auto-ord allocates the next slot and
-        // the slug dedups (an explicit duplicate `order` is a Conflict —
-        // see create_explicit_duplicate_order_conflicts).
-        let dup_spec = SPEC.replace("order: 1\n", "");
-        let Data::LessonCreate { id, .. } = create(&paths, &slug, &dup_spec).expect("dup") else {
+        // A provided slug is never uniquified (no silent `<slug>-2`): the
+        // AlreadyExists check fires before the ord insert, so the duplicate
+        // errors even though this spec also pins `order: 1`.
+        let err = create(&paths, &slug, SPEC).unwrap_err();
+        assert!(
+            matches!(err, CarpenterError::AlreadyExists(ref m) if m == "lesson arrays-101"),
+            "{err}"
+        );
+    }
+
+    #[test]
+    fn create_derived_slug_dedups_on_collision() {
+        let (paths, slug) = testutil::setup();
+        let spec = SPEC
+            .replace("slug: arrays-101\n", "")
+            .replace("order: 1\n", "");
+        create(&paths, &slug, &spec).unwrap();
+        // Derived slugs (slug omitted) keep the dedup behavior: -2, -3, …
+        let Data::LessonCreate { id, slug: dup, .. } = create(&paths, &slug, &spec).expect("dup")
+        else {
             panic!();
         };
-        assert!(id.starts_with("arrays-101-"), "{id}");
+        assert_eq!(id, "arrays-101-2");
+        assert_eq!(dup, "arrays-101-2");
     }
 
     fn bare_spec(i: usize) -> String {
