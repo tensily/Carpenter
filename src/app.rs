@@ -7,6 +7,7 @@
 use std::path::PathBuf;
 use std::process::ExitCode;
 
+use clap::error::{ContextKind, ContextValue, Error, ErrorKind};
 use clap::{Arg, ArgAction, ArgMatches, Command};
 
 use crate::commands;
@@ -641,7 +642,18 @@ fn positional(name: &'static str, help: &'static str) -> Arg {
 /// Never panics. Under the `dev` feature, `--capture-example <PATH>` runs the
 /// command normally and additionally writes its worked-example atom (adr/016).
 pub fn run() -> ExitCode {
-    let matches = cli().get_matches();
+    let matches = match cli().try_get_matches() {
+        Ok(m) => m,
+        Err(e) if is_dev_feature_error(&e) => {
+            eprintln!(
+                "error: this binary was built without `--features dev`; \
+                 `carpenter dev` is unavailable.\n\
+                 rebuild with: cargo devbuild (or: cargo build --features dev)"
+            );
+            return ExitCode::FAILURE;
+        }
+        Err(e) => e.exit(),
+    };
     if matches.subcommand().is_none() {
         let _ = cli().print_help();
         println!();
@@ -663,6 +675,16 @@ pub fn run() -> ExitCode {
     } else {
         ExitCode::SUCCESS
     }
+}
+
+/// True when a parse failure is exactly the misleading case — a binary built
+/// without `--features dev` receiving `carpenter dev …`, which clap reports as
+/// a bare `unrecognized subcommand` (issue #68). Pure, so tests pin the hint
+/// path without spawning a process; in a dev build the `dev` group exists, so
+/// this can never fire.
+fn is_dev_feature_error(e: &Error) -> bool {
+    e.kind() == ErrorKind::InvalidSubcommand
+        && e.get(ContextKind::InvalidSubcommand) == Some(&ContextValue::String("dev".into()))
 }
 
 /// Resolve the subcommand to a `Result<Data, _>`. The single envelope is
@@ -1178,4 +1200,27 @@ fn dev_group_present_in_dev_build() {
             "missing dev {expected}: {leaves:?}"
         );
     }
+}
+
+/// (non-dev builds, issue #68) `carpenter dev` is the hint case — not clap's
+/// plain `unrecognized subcommand`.
+#[cfg(all(test, not(feature = "dev")))]
+#[test]
+fn dev_subcommand_is_the_dev_feature_hint_case() {
+    let err = cli()
+        .try_get_matches_from(["carpenter", "dev"])
+        .unwrap_err();
+    assert!(is_dev_feature_error(&err));
+}
+
+/// (non-dev builds) any other invalid subcommand is not the hint case — `run`
+/// defers it to clap's default render + exit code 2.
+#[cfg(all(test, not(feature = "dev")))]
+#[test]
+fn other_invalid_subcommand_still_defers_to_clap() {
+    let err = cli()
+        .try_get_matches_from(["carpenter", "nope"])
+        .unwrap_err();
+    assert!(!is_dev_feature_error(&err));
+    assert_eq!(err.kind(), ErrorKind::InvalidSubcommand);
 }

@@ -187,7 +187,10 @@ Two build stages ([design/19](docs/design/19-dev-build.md),
 [adr/016](docs/adr/016-dev-feature.md)):
 - **dev** — `cargo xtask build --dev`: compiles with the `dev` feature, which
   **relaxes** the doc/example/scenario gates and `missing_docs` (so a command fn
-  compiles before its atom/test exist). No doc regen.
+  compiles before its atom/test exist). No doc regen. Plain `cargo build` /
+  `cargo test` compile without the feature, so `target/debug/carpenter dev …`
+  reports "built without `--features dev`" (issue #68); rebuild with
+  `cargo devbuild` or `cargo xtask build --dev`.
 - **release** — `cargo xtask build --release`: gen-howto + gen-specs + the strict
   `cargo build` (the ship build). Plain `cargo build` / `cargo xtask build` are
   also strict — a casual build still fails on an undocumented command (safety
