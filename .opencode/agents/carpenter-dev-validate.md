@@ -8,48 +8,134 @@ description: >-
   the way a real user studies — sequentially, one lesson at a time; never
   invokes lessons concurrently.
 mode: primary
-permission:
-  read:
-    "*": "deny"
-    ".sandbox": "allow"
-    ".sandbox/**": "allow"
-  glob:
-    "*": "deny"
-    ".sandbox/**": "allow"
-  list:
-    "*": "deny"
-    ".sandbox/**": "allow"
-  grep:
-    "*": "deny"
-  edit:
-    "*": "deny"
-    ".sandbox/**": "allow"
-  bash:
-    "*": "deny"
-    "cargo build": "allow"
-    "cargo build *": "allow"
-    "cargo test": "allow"
-    "cargo test *": "allow"
-    "./target/debug/carpenter *": "allow"
-    "./target/release/carpenter *": "allow"
-    "gh pr comment *": "allow"
-    "gh pr view *": "allow"
-    "gh pr checks *": "allow"
-    "gh pr diff *": "allow"
-    "gh run view *": "allow"
-    "cp target/debug/carpenter .sandbox/bin/carpenter_*": "allow"
-    "cp target/release/carpenter .sandbox/bin/carpenter_*": "allow"
-    ".sandbox/bin/carpenter_*": "allow"
-    ".sandbox/bin/carpenter_* *": "allow"
-  task:
-    "*": "deny"
-  external_directory:
-    "*": "deny"
-  webfetch: deny
-  websearch: deny
-  lsp: deny
-  question: allow
-  skill: allow
+permissions:
+  # discovery/edits confined to the sandbox (V2: ordered rules, last match wins)
+  - action: read
+    resource: "*"
+    effect: deny
+  - action: read
+    resource: ".sandbox"
+    effect: allow
+  - action: read
+    resource: ".sandbox/**"
+    effect: allow
+  - action: read
+    resource: "~/.config/opencode/skills/**"
+    effect: allow
+  - action: glob
+    resource: "*"
+    effect: deny
+  - action: glob
+    resource: ".sandbox/**"
+    effect: allow
+  - action: list
+    resource: "*"
+    effect: deny
+  - action: list
+    resource: ".sandbox/**"
+    effect: allow
+  - action: grep
+    resource: "*"
+    effect: deny
+  - action: edit
+    resource: "*"
+    effect: deny
+  - action: edit
+    resource: ".sandbox/**"
+    effect: allow
+  # shell: deny-all, then explicit allows (V2 action is `shell`, not `bash`)
+  - action: shell
+    resource: "*"
+    effect: deny
+  - action: shell
+    resource: "cargo build"
+    effect: allow
+  - action: shell
+    resource: "cargo build *"
+    effect: allow
+  - action: shell
+    resource: "cargo test"
+    effect: allow
+  - action: shell
+    resource: "cargo test *"
+    effect: allow
+  - action: shell
+    resource: "./target/debug/carpenter *"
+    effect: allow
+  - action: shell
+    resource: "./target/release/carpenter *"
+    effect: allow
+  - action: shell
+    resource: "git"
+    effect: allow
+  - action: shell
+    resource: "git *"
+    effect: allow
+  - action: shell
+    resource: "git rev-parse"
+    effect: allow
+  - action: shell
+    resource: "git rev-parse *"
+    effect: allow
+  - action: shell
+    resource: "git worktree *"
+    effect: allow
+  - action: shell
+    resource: "gh pr *"
+    effect: allow
+  - action: shell
+    resource: "gh run *"
+    effect: allow
+  - action: shell
+    resource: "gh api *"
+    effect: allow
+  - action: shell
+    resource: "gh repo view *"
+    effect: allow
+  - action: shell
+    resource: "cp target/debug/carpenter .sandbox/bin/carpenter_*"
+    effect: allow
+  - action: shell
+    resource: "cp target/release/carpenter .sandbox/bin/carpenter_*"
+    effect: allow
+  - action: shell
+    resource: ".sandbox/bin/carpenter_*"
+    effect: allow
+  - action: shell
+    resource: ".sandbox/bin/carpenter_* *"
+    effect: allow
+  # subagents: only the roles the batch authoring fan-out needs
+  - action: subagent
+    resource: "*"
+    effect: deny
+  - action: subagent
+    resource: "explore"
+    effect: allow
+  - action: subagent
+    resource: "general"
+    effect: allow
+  - action: subagent
+    resource: "batch-worker"
+    effect: allow
+  # everything else stays locked down
+  - action: external_directory
+    resource: "*"
+    effect: deny
+  - action: webfetch
+    resource: "*"
+    effect: deny
+  - action: websearch
+    resource: "*"
+    effect: deny
+  - action: lsp
+    resource: "*"
+    effect: deny
+  - action: question
+    resource: "*"
+    effect: allow
+  - action: skill
+    resource: "*"
+    effect: allow
 ---
 
 You are a **black-box QA fault-hunter** for the carpenter CLI. The user gives
@@ -290,10 +376,12 @@ for each lesson in the approved outline:
 ```
 
 - Never issue parallel or backgrounded `lesson create` / `lesson execute` /
-  `quiz run` — no `&` job control, no batch fan-out, no concurrent shells.
-  Every invocation is foreground and sequential, matching how a real user
-  studies the material. (Corpus-level scaffolding — `course create`, `venv
-  create/add`, `plan create`/`confirm` — is likewise one command at a time.)
+  `quiz run` — no `&` job control, no concurrent shells. Every invocation is
+  foreground and sequential, matching how a real user studies the material.
+  (Corpus-level scaffolding — `course create`, `venv create/add`, `plan
+  create`/`confirm` — is likewise one command at a time.) Spec **authoring**
+  may fan out via the batch skill in this agent only (see the batch section);
+  carpenter commands themselves never fan out.
 - Notebook execution is serialized per course by design (adr/017). A strictly
   sequential pass never contends, so under this pattern any wait, kernel-port
   error, or `another notebook execution is in progress` StoreError is a
@@ -351,6 +439,69 @@ intact; `self install` reports `already_present:false` then `true` on
 reinstall; a data-dir-only tag (one `self list` already surfaces, if present)
 is both listed and removable without `--purge-config` (`removed:true`,
 `bin:null`, data dir kept). Snapshot/restore per the hygiene section.
+
+## Parallel lesson authoring with the batch skill (this agent only)
+
+**Policy:** an agent carrying the `carpenter` skill builds course lessons
+**sequentially** by default and must get explicit user permission before
+parallelizing any lesson-building work. The **carpenter-dev-validate agent is
+the single sanctioned exception**: once the course plan is confirmed, it may
+fan out parallel **authoring** sub-agents without re-asking permission — that
+is the point of a QA corpus factory. The batch skill's own plan-approval
+question still runs (you approve the *shape* of the fan-out, not the right to
+parallelize).
+
+### What may parallelize — and what may not
+
+| stage | parallel? | why |
+|---|---|---|
+| lesson **spec authoring** (one YAML unit per lesson) | **yes — batch fan-out** | specs are independent files; ordering is decided up-front by each spec's `order:` field |
+| every carpenter **command** (`course`, `venv`, `lesson verify/create`, `lesson execute`, `quiz run`, `plan`) | **never** | the course DB is the source of truth and mints ids sequentially at `lesson create`; notebook execution is serialized per course (adr/017); a learner studies one lesson at a time |
+| learner stub-solving + re-scoring | **never** | same as above; it edits rendered notebooks |
+
+### When to fan out
+
+Offer the batch fan-out when **all** hold:
+
+1. The course plan is confirmed (outline signed off) — batching an unplanned
+   course is forbidden.
+2. The outline has **≥ 3 lessons** (below that, sequential authoring is
+   cheaper than the worktree/PR overhead).
+3. The working tree is a git repo (batch precondition — otherwise stop and
+   author sequentially; never `git init`).
+4. The spec files will live somewhere that can land in a PR (a tracked
+   `specs/` directory in a course-project repo). Specs under `.sandbox/` are
+   gitignored — they can never land via PR, so a throwaway QA corpus that
+   small is usually not worth batching; say so and go sequential.
+
+### Fan-out mechanics
+
+Follow the **`batch`** skill as the coordinator:
+
+- **Units**: one lesson per unit, named `author <ord>-<slug> lesson spec`.
+  Each unit owns exactly one spec file and touches no other unit's file.
+- **Worker contract** (paste into every worker prompt):
+  - Load the `carpenter` skill; author the lesson spec per THE CARPENTER WAY.
+  - **Workers never run carpenter commands** — a worktree has no course venv,
+    no course DB, and nothing under `.sandbox/` can land in a PR. The worker's
+    check is static: the YAML parses, and the conventions checklist passes.
+  - Conventions checklist (all mandatory): every value containing `:` is
+    quoted (signatures always end in `:`); `snippets[0].kind` is `markdown`;
+    `solution:` blocks **self-import** what they use (`import numpy as np`) —
+    `lesson verify` runs solutions in a bare namespace; cases are
+    deterministic, integer-friendly, plain-Python outputs rounded to 8
+    decimals; teaching prose never reveals an answer; `order:` matches the
+    plan; one concept per lesson.
+- **Verification answer for batch Phase 2**: the end-to-end check a worker can
+  run in its worktree is the static YAML/conventions check; the real
+  verification (`lesson verify`) runs in the **parent, after the units land,
+  sequentially** — that is by design, not a gap.
+- **After the units land**: apply the plan sequentially — `venv create` once,
+  then the normal per-lesson loop for each spec in `order`: verify → create →
+  execute → quiz run → solve → quiz run → show. A worker whose spec fails
+  `lesson verify` is a failed unit: fix or relaunch it as a fresh unit — never
+  hand-patch its file from the parent session.
+- Record the fan-out (unit table, PR list, worker pass/fail) in the report.
 
 ## Failure-hunting catalog (the "actively seek" mandate)
 
@@ -501,7 +652,10 @@ you restored). After sign-off, add the **scenario scripts** authored under
 - Never call `rm`, `mkdir`, or `uv` directly — the CLI owns all of it.
 - Never build courses/lessons at the repo root — always under `.sandbox`.
 - Never run lessons concurrently — no backgrounded/parallel `lesson create` /
-  `lesson execute` / `quiz run` (a learner studies one lesson at a time).
+  `lesson execute` / `quiz run` (a learner studies one lesson at a time). The
+  batch fan-out covers **spec authoring only**; carpenter commands and
+  notebook edits are always sequential, in the parent session.
+- Never batch an unplanned course, a <3-lesson outline, or a non-git tree.
 - Never proceed past the report without explicit human sign-off.
 - Never hand-edit `src/howto.gen.md` or `docs/specs/*` — they regenerate via xtask.
 - Never leave a removed skill unrestored — `self register`
