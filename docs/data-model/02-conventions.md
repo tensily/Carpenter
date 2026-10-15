@@ -3,8 +3,11 @@
 - **Primary keys:** stable string ids (`s1`, `p1`, `q1`, `c1`, `n1`, `pl1`, `g1`),
   assigned by carpenter, globally unique **within their table** (the `id` column is
   the PK). Assignment is a monotonic per-table counter (`id_seq` in `core/db.rs`),
-  so deleted ids are **never reused**. SQLite `rowid` is ignored as a key. (The
-  `a1` attempts prefix was removed with that table — adr/010.) **Exception —
+  so deleted ids are **never reused**. The counter bump is part of the writing
+  transaction (e.g. `plan confirm` materializes goals inside one): a failed
+  transaction rolls the counter back, so a rolled-back id was never attached to a
+  row and never counted as used. SQLite `rowid` is ignored as a key. (The `a1`
+  attempts prefix was removed with that table — adr/010.) **Exception —
   `lesson update --force`:** children whose spec content is unchanged keep their
   ids **and** their learner-state columns (`skip`, `pass_or_fail`, `last_check`);
   new or content-edited children take fresh allocation; ids of removed children

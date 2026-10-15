@@ -7,7 +7,7 @@
 
 use std::path::Path;
 
-use rusqlite::{params, Connection, OptionalExtension};
+use rusqlite::{params, Connection, OptionalExtension, Transaction};
 
 use crate::core::error::CarpenterError;
 use crate::core::reconcile;
@@ -275,6 +275,16 @@ pub fn next_id(conn: &Connection, table: &str, prefix: &str) -> Result<String, C
 
 fn store_msg(e: rusqlite::Error) -> CarpenterError {
     CarpenterError::StoreError(e.to_string())
+}
+
+/// Begin a transaction on an open course connection.
+pub fn transaction(conn: &mut Connection) -> Result<Transaction<'_>, CarpenterError> {
+    conn.transaction().map_err(store_msg)
+}
+
+/// Commit a transaction started by [`transaction`].
+pub fn commit(tx: Transaction<'_>) -> Result<(), CarpenterError> {
+    tx.commit().map_err(store_msg)
 }
 
 /// Inputs needed to derive a lesson's status.
