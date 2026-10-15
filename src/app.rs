@@ -586,7 +586,7 @@ fn self_group() -> Command {
                     Arg::new("tag")
                         .value_name("TAG")
                         .required(true)
-                        .help("Install tag: the binary stem (carpenter, carpenter-<branch>)."),
+                        .help("Install tag: the binary stem (carpenter, carpenter-<branch>); the underscored filename spelling (carpenter_<branch>) is accepted."),
                 )
                 .arg(
                     Arg::new("bin-dir")
@@ -1091,7 +1091,7 @@ fn self_cmd(paths: &Paths, sub: &ArgMatches) -> Result<Data, core::error::Carpen
     // the same tag (adr/027)
     let name = core::store::install_name();
     match sub.subcommand() {
-        Some(("install", m)) => commands::install::install(paths, bin_dir(m)),
+        Some(("install", m)) => commands::install::install(paths, bin_dir(m), &name),
         Some(("upgrade", m)) => commands::upgrade::upgrade(
             paths,
             m.get_one::<String>("source").map(|s| s.as_str()),

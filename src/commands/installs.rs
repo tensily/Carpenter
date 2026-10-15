@@ -29,9 +29,12 @@ pub fn list(paths: &Paths, bin_dir: Option<&str>) -> Result<Data, CarpenterError
     })
 }
 
-/// `self remove <tag> [--bin-dir <p>] [--purge-config] [--yes]`. The `tag`
-/// must be kebab-case (`^[a-z0-9]+(-[a-z0-9]+)*$`, max 60) — a `carpenter` or
-/// `carpenter-<branch>` stem (adr/027). Prints the removal plan and asks for
+/// `self remove <tag> [--bin-dir <p>] [--purge-config] [--yes]`. The `tag` is
+/// an install identity (adr/027), normalized through
+/// [`store::install_name_from`] — both spellings of a binary stem are
+/// accepted (`carpenter-ivan-topic` and the underscored filename
+/// `carpenter_ivan_topic` map onto the same kebab tag, which the envelope
+/// echoes, consistent with `self list`). Prints the removal plan and asks for
 /// confirmation unless `--yes` (adr/019 revision); a declined or absent
 /// confirmation stream is a `Conflict` error envelope — nothing is removed.
 pub fn remove(
@@ -41,11 +44,12 @@ pub fn remove(
     purge_config: bool,
     yes: bool,
 ) -> Result<Data, CarpenterError> {
-    store::validate_slug(tag)?;
+    let tag = store::install_name_from(Some(tag));
+    store::validate_slug(&tag)?;
     if !yes {
-        confirm::confirm(&installs::removal_plan(paths, bin_dir, purge_config, tag)?)?;
+        confirm::confirm(&installs::removal_plan(paths, bin_dir, purge_config, &tag)?)?;
     }
-    let r = installs::remove(paths, bin_dir, purge_config, tag)?;
+    let r = installs::remove(paths, bin_dir, purge_config, &tag)?;
     Ok(Data::InstallsRemove {
         removed: true,
         tag: tag.to_string(),
@@ -158,11 +162,65 @@ mod tests {
     }
 
     #[test]
-    fn remove_rejects_non_kebab_tags() {
+    fn remove_normalizes_non_kebab_input_to_the_kebab_tag() {
         let paths = testutil::meta_setup();
-        let err = remove(&paths, "Not_A_Tag", None, false, true).unwrap_err();
-        assert!(matches!(err, CarpenterError::ValidationError(_)), "{err:?}");
+        let bin_dir = paths.root.join("bin");
+        std::fs::create_dir_all(&bin_dir).unwrap();
+        // "Not_A_Tag" slugifies onto `not-a-tag`; nothing exists under that
+        // tag, so removal reports NotFound (validation no longer rejects —
+        // install_name_from maps any input onto a valid kebab tag)
+        let err = remove(
+            &paths,
+            "Not_A_Tag",
+            Some(bin_dir.to_str().unwrap()),
+            false,
+            true,
+        )
+        .unwrap_err();
+        assert!(matches!(err, CarpenterError::NotFound(_)), "{err:?}");
         let _ = std::fs::remove_dir_all(paths.root);
+    }
+
+    #[test]
+    fn remove_accepts_underscored_stem() {
+        let paths = testutil::meta_setup();
+        // issue #64: the raw binary filename spelling is accepted and behaves
+        // exactly like the kebab tag
+        crate::commands::register::register(&paths, false, "carpenter-validate")
+            .expect("register tagged skill");
+        let bin_dir = paths.root.join("bin");
+        std::fs::create_dir_all(&bin_dir).unwrap();
+        std::fs::write(bin_dir.join("carpenter_validate"), b"fake").unwrap();
+        let Data::InstallsRemove {
+            removed,
+            tag,
+            bin,
+            skill,
+            config_purged: _,
+        } = remove(
+            &paths,
+            "carpenter_validate",
+            Some(bin_dir.to_str().unwrap()),
+            false,
+            true,
+        )
+        .expect("remove by stem")
+        else {
+            panic!("InstallsRemove");
+        };
+        assert!(removed);
+        assert_eq!(
+            tag, "carpenter-validate",
+            "the envelope echoes the kebab tag"
+        );
+        assert_eq!(
+            bin.as_deref(),
+            Some(bin_dir.join("carpenter_validate").to_str().unwrap())
+        );
+        assert!(!bin_dir.join("carpenter_validate").exists());
+        let arr = skill.as_array().expect("skill removal outcome");
+        assert_eq!(arr[0]["removed"], json!(true));
+        let _ = std::fs::remove_dir_all(&paths.root);
     }
 
     #[test]
