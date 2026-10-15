@@ -4,9 +4,9 @@ use std::fs;
 
 use serde_json::{json, Map, Value};
 
-use crate::core::compare::CompareMode;
 use crate::core::error::CarpenterError;
 use crate::core::exec;
+use crate::core::reconcile;
 use crate::core::store;
 use crate::core::{db, notebook, status, store::Paths, time};
 use crate::models::execute::{ExecError, ExecuteCells};
@@ -72,19 +72,18 @@ fn insert_cases(
     owner_type: &str,
     owner_id: &str,
     cases: &[crate::models::lesson::CaseSpec],
+    case_ids: &[Option<String>],
     total: &mut i64,
 ) -> Result<(), CarpenterError> {
     for (c_ord, case) in cases.iter().enumerate() {
-        let cid = db::next_id(conn, "test_cases", "c")?;
+        let cid = match case_ids.get(c_ord) {
+            Some(Some(id)) => id.clone(),
+            _ => db::next_id(conn, "test_cases", "c")?,
+        };
         let args = serde_json::to_string(&case.args).unwrap_or_else(|_| String::from("[]"));
         let kwargs = serde_json::to_string(&case.kwargs).unwrap_or_else(|_| String::from("{}"));
         let expected =
             serde_json::to_string(&case.expected).unwrap_or_else(|_| String::from("null"));
-        let compare = match case.compare {
-            CompareMode::Exact => "exact",
-            CompareMode::Sorted => "sorted",
-            CompareMode::Set => "set",
-        };
         db::insert_test_case(
             conn,
             &cid,
@@ -93,7 +92,7 @@ fn insert_cases(
             &args,
             &kwargs,
             &expected,
-            compare,
+            case.compare.as_str(),
             c_ord as i64,
         )?;
         *total += 1;
@@ -102,10 +101,16 @@ fn insert_cases(
 }
 
 /// Insert a lesson's sections/practice/quizzes/cases from a spec; return counts.
+///
+/// `plan` carries the id-preservation decisions for `lesson update --force`:
+/// positions it marks for reuse re-insert under the old id with the carried
+/// learner-state columns; everything else allocates a fresh `next_id`.
+/// `create` passes `&reconcile::Plan::default()` (empty ⇒ all fresh).
 fn insert_lesson_content(
     conn: &rusqlite::Connection,
     lesson_id: &str,
     spec: &LessonSpec,
+    plan: &reconcile::Plan,
 ) -> Result<LessonCounts, CarpenterError> {
     let mut counts = LessonCounts {
         sections: 0,
@@ -115,7 +120,11 @@ fn insert_lesson_content(
     };
     let mut sn = 0usize;
     for (s_ord, section) in spec.sections.iter().enumerate() {
-        let sid = db::next_id(conn, "sections", "s")?;
+        let sec_plan = plan.sections.get(s_ord);
+        let sid = match sec_plan.and_then(|p| p.id.clone()) {
+            Some(id) => id,
+            None => db::next_id(conn, "sections", "s")?,
+        };
         let snippets_json = serialize_snippets(&section.snippets, &mut sn);
         db::insert_section(
             conn,
@@ -127,7 +136,14 @@ fn insert_lesson_content(
         )?;
         counts.sections += 1;
         for (p_ord, prac) in section.practice.iter().enumerate() {
-            let pid = db::next_id(conn, "practice", "p")?;
+            let prac_plan = sec_plan.and_then(|p| p.practice.get(p_ord));
+            let (pid, state) = match prac_plan.and_then(|p| p.reuse.clone()) {
+                Some(r) => (r.id, r.state),
+                None => (
+                    db::next_id(conn, "practice", "p")?,
+                    reconcile::CheckableState::fresh(),
+                ),
+            };
             db::insert_practice(
                 conn,
                 &pid,
@@ -137,13 +153,29 @@ fn insert_lesson_content(
                 &prac.prompt,
                 prac.solution.as_deref().unwrap_or(""),
                 p_ord as i64,
+                &state,
             )?;
             counts.practice += 1;
-            insert_cases(conn, "practice", &pid, &prac.cases, &mut counts.cases)?;
+            let case_ids: &[Option<String>] = prac_plan.map(|p| p.cases.as_slice()).unwrap_or(&[]);
+            insert_cases(
+                conn,
+                "practice",
+                &pid,
+                &prac.cases,
+                case_ids,
+                &mut counts.cases,
+            )?;
         }
     }
     for (q_ord, quiz) in spec.quizzes.iter().enumerate() {
-        let qid = db::next_id(conn, "quizzes", "q")?;
+        let quiz_plan = plan.quizzes.get(q_ord);
+        let (qid, state) = match quiz_plan.and_then(|p| p.reuse.clone()) {
+            Some(r) => (r.id, r.state),
+            None => (
+                db::next_id(conn, "quizzes", "q")?,
+                reconcile::CheckableState::fresh(),
+            ),
+        };
         db::insert_quiz(
             conn,
             &qid,
@@ -153,9 +185,11 @@ fn insert_lesson_content(
             &quiz.prompt,
             quiz.solution.as_deref().unwrap_or(""),
             q_ord as i64,
+            &state,
         )?;
         counts.quizzes += 1;
-        insert_cases(conn, "quiz", &qid, &quiz.cases, &mut counts.cases)?;
+        let case_ids: &[Option<String>] = quiz_plan.map(|p| p.cases.as_slice()).unwrap_or(&[]);
+        insert_cases(conn, "quiz", &qid, &quiz.cases, case_ids, &mut counts.cases)?;
     }
     Ok(counts)
 }
@@ -189,7 +223,7 @@ pub fn create(paths: &Paths, course_slug: &str, spec_text: &str) -> Result<Data,
         }
         None => db::insert_lesson_auto_ord(&conn, &lesson_id, &slug, &spec.title, &now, &now)?,
     };
-    let counts = insert_lesson_content(&conn, &lesson_id, &spec)?;
+    let counts = insert_lesson_content(&conn, &lesson_id, &spec, &reconcile::Plan::default())?;
 
     let dir = lesson_dir(paths, course_slug, &slug, ord);
     fs::create_dir_all(&dir).map_err(store::io_to_store)?;
@@ -289,6 +323,11 @@ pub fn show(paths: &Paths, course_slug: &str, id: &str) -> Result<Data, Carpente
 }
 
 /// Update a lesson from a spec (requires `--force`); re-renders the notebook.
+///
+/// Children whose spec content is unchanged keep their ids **and** their
+/// learner-state columns (`skip`, `pass_or_fail`, `last_check`); new or
+/// content-edited children allocate fresh ids (never reused); ids of removed
+/// children vanish and are never reused (`id_seq` only moves forward).
 pub fn update(
     paths: &Paths,
     course_slug: &str,
@@ -306,8 +345,10 @@ pub fn update(
     let conn = db::open_course(paths, course_slug)?;
     let lesson = db::get_lesson(&conn, id)?;
     let now = time::now_iso();
+    let old = db::snapshot_lesson_content(&conn, id)?;
+    let plan = reconcile::plan(&old, &spec);
     db::delete_lesson_content(&conn, id)?;
-    insert_lesson_content(&conn, id, &spec)?;
+    insert_lesson_content(&conn, id, &spec, &plan)?;
     db::update_lesson_meta(&conn, id, &spec.title, &now)?;
 
     let dir = lesson_dir(paths, course_slug, &lesson.slug, lesson.ord);
@@ -468,14 +509,6 @@ struct VerifyPayloadCase {
     compare: String,
 }
 
-fn compare_str(m: CompareMode) -> &'static str {
-    match m {
-        CompareMode::Exact => "exact",
-        CompareMode::Sorted => "sorted",
-        CompareMode::Set => "set",
-    }
-}
-
 /// Build verify payload items from a spec (`--spec` mode; owner_id = fn name).
 fn payload_items_from_spec(spec: &LessonSpec) -> Vec<VerifyPayloadItem> {
     let mut out = Vec::new();
@@ -495,7 +528,7 @@ fn payload_items_from_spec(spec: &LessonSpec) -> Vec<VerifyPayloadItem> {
                         args: Value::Array(c.args.clone()),
                         kwargs: c.kwargs.clone(),
                         expected: c.expected.clone(),
-                        compare: compare_str(c.compare).into(),
+                        compare: c.compare.as_str().into(),
                     })
                     .collect(),
             });
@@ -516,7 +549,7 @@ fn payload_items_from_spec(spec: &LessonSpec) -> Vec<VerifyPayloadItem> {
                     args: Value::Array(c.args.clone()),
                     kwargs: c.kwargs.clone(),
                     expected: c.expected.clone(),
-                    compare: compare_str(c.compare).into(),
+                    compare: c.compare.as_str().into(),
                 })
                 .collect(),
         });
@@ -959,6 +992,136 @@ mod tests {
         assert!(matches!(err, CarpenterError::Conflict(_)));
     }
 
+    /// Two practices + one quiz — id allocation on create:
+    /// `s1, p1(sum_array), c1, c2, p2(len_array), c3, q1(max_value), c4`.
+    const RICH: &str = "title: Arrays 101\nslug: arrays-101\norder: 1\nsections:\n  - title: Intro\n    snippets:\n      - kind: markdown\n        content: \"# hi\"\n    practice:\n      - name: sum_array\n        signature: \"def sum_array(arr):\"\n        prompt: sum it\n        solution: |\n          def sum_array(arr):\n              return sum(arr)\n        cases:\n          - args:\n              - [1, 2]\n            expected: 3\n          - args:\n              - []\n            expected: 0\n      - name: len_array\n        signature: \"def len_array(arr):\"\n        prompt: count it\n        cases:\n          - args:\n              - [1]\n            expected: 1\nquizzes:\n  - name: max_value\n    signature: \"def max_value(arr):\"\n    cases:\n      - args:\n          - [3, 1, 2]\n        expected: 3\n        compare: set\n";
+
+    /// `RICH` with the two practice items swapped (reorders must keep ids).
+    const RICH_REORDERED: &str = "title: Arrays 101\nslug: arrays-101\norder: 1\nsections:\n  - title: Intro\n    snippets:\n      - kind: markdown\n        content: \"# hi\"\n    practice:\n      - name: len_array\n        signature: \"def len_array(arr):\"\n        prompt: count it\n        cases:\n          - args:\n              - [1]\n            expected: 1\n      - name: sum_array\n        signature: \"def sum_array(arr):\"\n        prompt: sum it\n        solution: |\n          def sum_array(arr):\n              return sum(arr)\n        cases:\n          - args:\n              - [1, 2]\n            expected: 3\n          - args:\n              - []\n            expected: 0\nquizzes:\n  - name: max_value\n    signature: \"def max_value(arr):\"\n    cases:\n      - args:\n          - [3, 1, 2]\n        expected: 3\n        compare: set\n";
+
+    /// Ids pulled out of a `lesson get` tree: section id, per-practice
+    /// `(id, case ids)`, and the quiz `(id, case ids)`.
+    struct TreeIds {
+        section: String,
+        practice: Vec<(String, Vec<String>)>,
+        quiz: (String, Vec<String>),
+    }
+
+    fn tree_ids(paths: &Paths, slug: &str) -> TreeIds {
+        let Data::LessonGet {
+            sections, quizzes, ..
+        } = get(paths, slug, "arrays-101").expect("get")
+        else {
+            panic!("LessonGet");
+        };
+        assert_eq!(sections.len(), 1);
+        assert_eq!(quizzes.len(), 1);
+        let sec = &sections[0];
+        TreeIds {
+            section: sec.id.clone(),
+            practice: sec
+                .practice
+                .iter()
+                .map(|p| {
+                    (
+                        p.id.clone(),
+                        p.cases.iter().map(|c| c.id.clone()).collect::<Vec<_>>(),
+                    )
+                })
+                .collect(),
+            quiz: (
+                quizzes[0].id.clone(),
+                quizzes[0]
+                    .cases
+                    .iter()
+                    .map(|c| c.id.clone())
+                    .collect::<Vec<_>>(),
+            ),
+        }
+    }
+
+    #[test]
+    fn update_same_spec_preserves_ids_and_learner_state() {
+        let (paths, slug) = testutil::setup();
+        create(&paths, &slug, SPEC).unwrap();
+        crate::commands::skip::skip(&paths, &slug, "practice", "p1", false).expect("skip p1");
+        crate::commands::skip::skip(&paths, &slug, "quiz", "q1", false).expect("skip q1");
+        {
+            let conn = db::open_course(&paths, &slug).unwrap();
+            conn.execute(
+                "UPDATE practice SET pass_or_fail=1, last_check='{\"passed\":2,\"total\":2}' WHERE id='p1'",
+                [],
+            )
+            .unwrap();
+        }
+        update(&paths, &slug, "arrays-101", SPEC, true).expect("update");
+        let Data::LessonGet {
+            sections, quizzes, ..
+        } = get(&paths, &slug, "arrays-101").expect("get")
+        else {
+            panic!();
+        };
+        assert_eq!(sections[0].id, "s1");
+        let p = &sections[0].practice[0];
+        assert_eq!(p.id, "p1");
+        assert!(p.skip, "skip flag must survive the update");
+        assert!(p.pass_or_fail, "pass_or_fail must survive the update");
+        let case_ids: Vec<_> = p.cases.iter().map(|c| c.id.as_str()).collect();
+        assert_eq!(case_ids, ["c1", "c2"]);
+        let q = &quizzes[0];
+        assert_eq!(q.id, "q1");
+        assert!(q.skip);
+        assert_eq!(q.cases[0].id, "c3");
+    }
+
+    #[test]
+    fn update_edited_practice_rekeys_only_it() {
+        let (paths, slug) = testutil::setup();
+        create(&paths, &slug, RICH).unwrap();
+        let edited = RICH.replace("prompt: sum it", "prompt: sum it again");
+        update(&paths, &slug, "arrays-101", &edited, true).expect("update");
+        let t = tree_ids(&paths, &slug);
+        assert_eq!(t.section, "s1");
+        assert_eq!(t.practice.len(), 2);
+        assert_eq!(
+            t.practice[0],
+            (
+                String::from("p3"),
+                vec![String::from("c5"), String::from("c6")]
+            ),
+            "content-edited practice re-keys to fresh never-reused ids"
+        );
+        assert_eq!(
+            t.practice[1],
+            (String::from("p2"), vec![String::from("c3")]),
+            "unchanged sibling keeps its ids"
+        );
+        assert_eq!(t.quiz.0, "q1");
+        assert_eq!(t.quiz.1, [String::from("c4")]);
+    }
+
+    #[test]
+    fn update_reorder_keeps_child_ids() {
+        let (paths, slug) = testutil::setup();
+        create(&paths, &slug, RICH).unwrap();
+        update(&paths, &slug, "arrays-101", RICH_REORDERED, true).expect("update");
+        let t = tree_ids(&paths, &slug);
+        assert_eq!(t.section, "s1");
+        assert_eq!(
+            t.practice,
+            vec![
+                (String::from("p2"), vec![String::from("c3")]),
+                (
+                    String::from("p1"),
+                    vec![String::from("c1"), String::from("c2")]
+                ),
+            ],
+            "position-independent matching keeps ids across reorders"
+        );
+        assert_eq!(t.quiz.0, "q1");
+        assert_eq!(t.quiz.1, [String::from("c4")]);
+    }
+
     #[test]
     fn delete_ok() {
         let (paths, slug) = testutil::setup();
@@ -1139,5 +1302,79 @@ mod tests {
                 c["source"].as_str() == Some("def sum_array(arr):\n    return sum(arr)\n")
             });
         assert!(kept, "learner source should be left intact without --force");
+    }
+
+    fn read_nb(nb_path: &std::path::Path) -> Value {
+        serde_json::from_str(&std::fs::read_to_string(nb_path).unwrap()).unwrap()
+    }
+
+    fn managed_cells<'a>(nb: &'a Value, kind: &str) -> Vec<(usize, &'a Value)> {
+        nb["cells"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .enumerate()
+            .filter(|(_, c)| c.get("metadata").and_then(|m| m.get("managed")) == Some(&json!(kind)))
+            .collect()
+    }
+
+    #[test]
+    fn create_renders_question_md_before_prompted_stubs_only() {
+        let (paths, slug) = testutil::setup();
+        create(&paths, &slug, SPEC).unwrap();
+        let nb_path = lesson_path(&paths, &slug).join("lesson.ipynb");
+        let nb = read_nb(&nb_path);
+        // SPEC's practice has a prompt; its quiz does not.
+        let questions = managed_cells(&nb, "question-md");
+        assert_eq!(questions.len(), 1, "{questions:?}");
+        let (qi, q) = questions[0];
+        assert_eq!(q["metadata"]["practice_id"], json!("p1"));
+        assert_eq!(q["metadata"]["lesson_id"], json!("arrays-101"));
+        assert_eq!(q["cell_type"], json!("markdown"));
+        assert_eq!(q["source"], json!("sum it\n"));
+        let stubs = managed_cells(&nb, "practice-stub");
+        assert_eq!(stubs.len(), 1);
+        assert_eq!(stubs[0].0, qi + 1, "question-md must precede its stub");
+        assert!(managed_cells(&nb, "quiz-stub").iter().all(|(i, _)| {
+            nb["cells"][i - 1]
+                .get("metadata")
+                .and_then(|m| m.get("managed"))
+                != Some(&json!("question-md"))
+        }));
+    }
+
+    #[test]
+    fn sync_regenerates_question_md_and_reanchors_learner_cells() {
+        let (paths, slug) = testutil::setup();
+        create(&paths, &slug, SPEC).unwrap();
+        let nb_path = lesson_path(&paths, &slug).join("lesson.ipynb");
+        // learner drops a note right after the question cell (and defaces it —
+        // managed cells regenerate wholesale regardless)
+        let mut nb = read_nb(&nb_path);
+        let (qi, _) = managed_cells(&nb, "question-md").remove(0);
+        nb["cells"].as_array_mut().unwrap().insert(
+            qi + 1,
+            json!({"cell_type": "markdown", "metadata": {}, "source": "my note\n"}),
+        );
+        nb["cells"][qi]["source"] = json!("defaced\n");
+        std::fs::write(&nb_path, nb.to_string()).unwrap();
+
+        let Data::LessonSync { conflicts, .. } =
+            sync(&paths, &slug, "arrays-101", false).expect("sync")
+        else {
+            panic!();
+        };
+        assert!(conflicts.is_empty(), "{conflicts:?}");
+        let after = read_nb(&nb_path);
+        let mut questions = managed_cells(&after, "question-md");
+        assert_eq!(questions.len(), 1);
+        let (qi, q) = questions.remove(0);
+        assert_eq!(
+            q["source"],
+            json!("sum it\n"),
+            "question regenerated from DB"
+        );
+        // learner cell re-anchored directly after the regenerated question cell
+        assert_eq!(after["cells"][qi + 1]["source"], json!("my note\n"));
     }
 }

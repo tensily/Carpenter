@@ -1,7 +1,8 @@
 //! Render a lesson notebook (DB → `.ipynb`) and define `scaffold_hash`.
 //!
-//! Render order: skip-config → title → section cells (snippets, then practice
-//! stubs + checks) → quiz stubs + checks. Every managed cell is tagged with
+//! Render order: skip-config → title → section cells (snippets, then question
+//! markdown + practice stubs + checks) → question markdown + quiz stubs +
+//! checks. Every managed cell is tagged with
 //! `metadata.managed` (+ id siblings); untagged learner cells are preserved by
 //! sync (P5). `scaffold_hash` is the FNV-1a of the canonical scaffold string and
 //! lives only in cell metadata (never the DB).
@@ -17,12 +18,25 @@ use crate::models::lesson::SnippetOut;
 use crate::models::LessonConflict;
 
 /// The canonical scaffold string for a stub (`signature` + prompt comment +
-/// `raise NotImplementedError`).
+/// `raise NotImplementedError`). Multi-line prompts are commented line by
+/// line so the scaffold stays valid Python; single-line and empty prompts
+/// keep their exact legacy bytes.
 pub fn canonical_scaffold(signature: &str, prompt: &str) -> String {
-    if prompt.trim().is_empty() {
+    let trimmed = prompt.trim();
+    if trimmed.is_empty() {
         format!("{signature}\n    raise NotImplementedError\n")
-    } else {
+    } else if !trimmed.contains('\n') {
         format!("{signature}\n    # {prompt}\n    raise NotImplementedError\n")
+    } else {
+        let comment = trimmed
+            .lines()
+            .map(|l| match l.trim_end() {
+                "" => String::from("    #"),
+                t => format!("    # {t}"),
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+        format!("{signature}\n{comment}\n    raise NotImplementedError\n")
     }
 }
 
@@ -54,6 +68,11 @@ pub fn skip_config_source() -> String {
 /// The check-cell source: `helper.check("<type>", "<id>", <name>)`.
 pub fn check_source(owner_type: &str, owner_id: &str, fn_name: &str) -> String {
     format!("import helper\nhelper.check(\"{owner_type}\", \"{owner_id}\", {fn_name})\n")
+}
+
+/// The question-cell source: the full prompt verbatim (markdown allowed).
+pub fn question_source(prompt: &str) -> String {
+    format!("{}\n", prompt.trim_end())
 }
 
 fn md_cell(source: &str, managed: Value) -> Value {
@@ -125,6 +144,12 @@ pub fn render_notebook(conn: &Connection, lesson_id: &str) -> Result<Value, Carp
             }
         }
         for p in db::list_practice(conn, &sec.id)? {
+            if !p.prompt.trim().is_empty() {
+                cells.push(md_cell(
+                    &question_source(&p.prompt),
+                    json!({"managed": "question-md", "practice_id": p.id, "lesson_id": lesson_id}),
+                ));
+            }
             let scaf = canonical_scaffold(&p.signature, &p.prompt);
             let hash = stable_hash(&scaf);
             cells.push(code_cell(
@@ -139,6 +164,12 @@ pub fn render_notebook(conn: &Connection, lesson_id: &str) -> Result<Value, Carp
     }
 
     for q in db::list_quizzes(conn, lesson_id)? {
+        if !q.prompt.trim().is_empty() {
+            cells.push(md_cell(
+                &question_source(&q.prompt),
+                json!({"managed": "question-md", "quiz_id": q.id, "lesson_id": lesson_id}),
+            ));
+        }
         let scaf = canonical_scaffold(&q.signature, &q.prompt);
         let hash = stable_hash(&scaf);
         cells.push(code_cell(
@@ -192,6 +223,11 @@ pub fn managed_key(cell: &Value, mtype: &str) -> String {
             meta_str(cell, "quiz_id").unwrap_or_default()
         ),
         "check" => format!("check:{}", meta_str(cell, "target").unwrap_or_default()),
+        "question-md" => format!(
+            "question-md:{}:{}",
+            meta_str(cell, "practice_id").unwrap_or_default(),
+            meta_str(cell, "quiz_id").unwrap_or_default()
+        ),
         other => other.to_string(),
     }
 }
@@ -387,11 +423,59 @@ mod tests {
     }
 
     #[test]
+    fn scaffold_comments_multi_line_prompts() {
+        let s = canonical_scaffold("def f(x):", "first line\n\nsecond line\n");
+        let lines: Vec<&str> = s.lines().collect();
+        assert_eq!(lines[0], "def f(x):");
+        assert_eq!(lines[lines.len() - 1], "    raise NotImplementedError");
+        for l in &lines[1..lines.len() - 1] {
+            assert!(l.starts_with("    #"), "uncommented scaffold line: {l:?}");
+        }
+        assert_eq!(s.lines().nth(1), Some("    # first line"));
+        assert_eq!(s.lines().nth(2), Some("    #"));
+        assert_eq!(s.lines().nth(3), Some("    # second line"));
+        assert_eq!(
+            scaffold_hash("def f(x):", "a\nb"),
+            scaffold_hash("def f(x):", "a\nb")
+        );
+    }
+
+    #[test]
+    fn scaffold_keeps_single_line_legacy_bytes() {
+        // YAML block scalars end in a newline; the single-line form (comment
+        // line + blank line) is pinned so existing notebooks' scaffold hashes
+        // stay valid on sync.
+        assert_eq!(
+            canonical_scaffold("def f(x):", "hi\n"),
+            "def f(x):\n    # hi\n\n    raise NotImplementedError\n"
+        );
+    }
+
+    #[test]
     fn check_source_emits_helper_call() {
         let s = check_source("practice", "p1", "sum_array");
         assert!(
             s.contains(r#"helper.check("practice", "p1", sum_array)"#),
             "{s}"
         );
+    }
+
+    #[test]
+    fn question_source_is_prompt_with_single_trailing_newline() {
+        assert_eq!(question_source("Why?\n"), "Why?\n");
+        assert_eq!(question_source("a\nb"), "a\nb\n");
+        assert_eq!(question_source(""), "\n");
+    }
+
+    #[test]
+    fn managed_key_distinguishes_question_cells() {
+        let p1 = json!({"metadata": {"managed": "question-md", "practice_id": "p1"}});
+        let p2 = json!({"metadata": {"managed": "question-md", "practice_id": "p2"}});
+        let q1 = json!({"metadata": {"managed": "question-md", "quiz_id": "p1"}});
+        let kp1 = managed_key(&p1, "question-md");
+        assert_eq!(kp1, "question-md:p1:");
+        assert_eq!(managed_key(&q1, "question-md"), "question-md::p1");
+        assert_ne!(kp1, managed_key(&p2, "question-md"));
+        assert_ne!(kp1, managed_key(&q1, "question-md"));
     }
 }

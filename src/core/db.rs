@@ -10,6 +10,7 @@ use std::path::Path;
 use rusqlite::{params, Connection, OptionalExtension};
 
 use crate::core::error::CarpenterError;
+use crate::core::reconcile;
 use crate::core::store::Paths;
 use crate::models::{CourseCounts, CourseRow, GoalRow, PlanRow};
 
@@ -870,7 +871,9 @@ pub fn list_practice(
     Ok(rows)
 }
 
-/// Insert a practice row.
+/// Insert a practice row. `state` carries the learner-state columns — fresh
+/// inserts pass [`reconcile::CheckableState::fresh`]; `lesson update --force`
+/// passes the carried columns for content-unchanged children.
 #[allow(clippy::too_many_arguments)]
 pub fn insert_practice(
     conn: &Connection,
@@ -881,11 +884,23 @@ pub fn insert_practice(
     prompt: &str,
     solution: &str,
     ord: i64,
+    state: &reconcile::CheckableState,
 ) -> Result<(), CarpenterError> {
     conn.execute(
         "INSERT INTO practice (id,section_id,name,signature,prompt,solution,ord,pass_or_fail,last_check,skip) \
-         VALUES (?1,?2,?3,?4,?5,?6,?7,0,'{}',0)",
-        params![id, section_id, name, signature, prompt, solution, ord],
+         VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10)",
+        params![
+            id,
+            section_id,
+            name,
+            signature,
+            prompt,
+            solution,
+            ord,
+            i64::from(state.pass_or_fail),
+            state.last_check,
+            i64::from(state.skip),
+        ],
     )
     .map_err(store_msg)?;
     Ok(())
@@ -908,7 +923,9 @@ pub fn list_quizzes(
     Ok(rows)
 }
 
-/// Insert a quiz row.
+/// Insert a quiz row. `state` carries the learner-state columns — fresh
+/// inserts pass [`reconcile::CheckableState::fresh`]; `lesson update --force`
+/// passes the carried columns for content-unchanged children.
 #[allow(clippy::too_many_arguments)]
 pub fn insert_quiz(
     conn: &Connection,
@@ -919,11 +936,23 @@ pub fn insert_quiz(
     prompt: &str,
     solution: &str,
     ord: i64,
+    state: &reconcile::CheckableState,
 ) -> Result<(), CarpenterError> {
     conn.execute(
         "INSERT INTO quizzes (id,lesson_id,name,signature,prompt,solution,ord,pass_or_fail,last_check,skip) \
-         VALUES (?1,?2,?3,?4,?5,?6,?7,0,'{}',0)",
-        params![id, lesson_id, name, signature, prompt, solution, ord],
+         VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10)",
+        params![
+            id,
+            lesson_id,
+            name,
+            signature,
+            prompt,
+            solution,
+            ord,
+            i64::from(state.pass_or_fail),
+            state.last_check,
+            i64::from(state.skip),
+        ],
     )
     .map_err(store_msg)?;
     Ok(())
@@ -1097,6 +1126,80 @@ pub fn list_cases(
         .collect::<rusqlite::Result<Vec<_>>>()
         .map_err(store_msg)?;
     Ok(rows)
+}
+
+/// Snapshot a lesson's current content as reconcile-comparable shapes — read
+/// BEFORE [`delete_lesson_content`] so `lesson update --force` can re-insert
+/// content-unchanged children under their old ids with their learner-state
+/// columns. Lists come back lowest-`ord` first (the matching order).
+pub fn snapshot_lesson_content(
+    conn: &Connection,
+    lesson_id: &str,
+) -> Result<reconcile::OldContent, CarpenterError> {
+    let mut content = reconcile::OldContent::default();
+    for s in list_sections(conn, lesson_id)? {
+        let mut practice = Vec::new();
+        for p in list_practice(conn, &s.id)? {
+            practice.push(snapshot_checkable(conn, "practice", &p)?);
+        }
+        content.sections.push(reconcile::OldSection {
+            id: s.id,
+            title: s.title,
+            snippets: snippet_pairs(&s.snippets),
+            practice,
+        });
+    }
+    for q in list_quizzes(conn, lesson_id)? {
+        content.quizzes.push(snapshot_checkable(conn, "quiz", &q)?);
+    }
+    Ok(content)
+}
+
+fn snapshot_checkable(
+    conn: &Connection,
+    owner_type: &str,
+    c: &CheckableDb,
+) -> Result<reconcile::OldCheckable, CarpenterError> {
+    let cases = list_cases(conn, owner_type, &c.id)?
+        .into_iter()
+        .map(|cc| reconcile::OldCase {
+            id: cc.id,
+            compare: cc.compare,
+            args: cc.args,
+            kwargs: cc.kwargs,
+            expected: cc.expected,
+        })
+        .collect();
+    Ok(reconcile::OldCheckable {
+        id: c.id.clone(),
+        name: c.name.clone(),
+        signature: c.signature.clone(),
+        prompt: c.prompt.clone(),
+        solution: c.solution.clone(),
+        state: reconcile::CheckableState {
+            skip: c.skip,
+            pass_or_fail: c.pass_or_fail,
+            last_check: c.last_check.clone(),
+        },
+        cases,
+    })
+}
+
+/// `(kind, content)` per stored snippet — the `sn{n}` ids are dropped (they
+/// are renumbered on every insert, never matched). Lenient on corrupt JSON
+/// (same policy as the renderer): an unparseable value matches nothing, which
+/// at worst re-keys the section, never loses data.
+fn snippet_pairs(snippets_json: &str) -> Vec<(String, String)> {
+    #[derive(serde::Deserialize)]
+    struct Snippet {
+        kind: String,
+        content: String,
+    }
+    serde_json::from_str::<Vec<Snippet>>(snippets_json)
+        .unwrap_or_default()
+        .into_iter()
+        .map(|s| (s.kind, s.content))
+        .collect()
 }
 
 // ---- notes ----
@@ -1366,8 +1469,30 @@ mod tests {
         let conn = open(&tmp_db()).expect("open");
         insert_lesson(&conn, "l1", "l1", "L", 1, "t0", "t0").expect("lesson");
         insert_section(&conn, "s1", "l1", "S", "[]", 0).expect("section");
-        insert_practice(&conn, "p1", "s1", "f", "def f():", "", "", 0).expect("practice");
-        insert_quiz(&conn, "q1", "l1", "g", "def g():", "", "", 0).expect("quiz");
+        insert_practice(
+            &conn,
+            "p1",
+            "s1",
+            "f",
+            "def f():",
+            "",
+            "",
+            0,
+            &reconcile::CheckableState::fresh(),
+        )
+        .expect("practice");
+        insert_quiz(
+            &conn,
+            "q1",
+            "l1",
+            "g",
+            "def g():",
+            "",
+            "",
+            0,
+            &reconcile::CheckableState::fresh(),
+        )
+        .expect("quiz");
         assert_eq!(practice_lesson_id(&conn, "p1").expect("owner"), "l1");
         assert_eq!(get_practice(&conn, "p1").expect("get").name, "f");
         assert!(matches!(
@@ -1386,6 +1511,96 @@ mod tests {
         assert!(!get_practice(&conn, "p1").unwrap().skip);
         set_lesson_status(&conn, "l1", "skipped").expect("status");
         assert_eq!(get_lesson(&conn, "l1").unwrap().status, "skipped");
+    }
+
+    #[test]
+    fn insert_carries_learner_state_columns() {
+        let conn = open(&tmp_db()).expect("open");
+        insert_lesson(&conn, "l1", "l1", "L", 1, "t0", "t0").expect("lesson");
+        insert_section(&conn, "s1", "l1", "S", "[]", 0).expect("section");
+        let carried = reconcile::CheckableState {
+            skip: true,
+            pass_or_fail: true,
+            last_check: String::from(r#"{"passed":1,"total":1}"#),
+        };
+        insert_practice(&conn, "p1", "s1", "f", "def f():", "", "", 0, &carried).expect("practice");
+        insert_quiz(&conn, "q1", "l1", "g", "def g():", "", "", 0, &carried).expect("quiz");
+        for got in [
+            get_practice(&conn, "p1").expect("practice"),
+            get_quiz(&conn, "q1").expect("quiz"),
+        ] {
+            assert!(got.skip);
+            assert!(got.pass_or_fail);
+            assert_eq!(got.last_check, r#"{"passed":1,"total":1}"#);
+        }
+    }
+
+    #[test]
+    fn snapshot_lesson_content_reads_children_lowest_ord_first() {
+        let conn = open(&tmp_db()).expect("open");
+        insert_lesson(&conn, "l1", "l1", "L", 1, "t0", "t0").expect("lesson");
+        insert_section(
+            &conn,
+            "s2",
+            "l1",
+            "S2",
+            r#"[{"id":"sn1","kind":"code","content":"x"}]"#,
+            1,
+        )
+        .expect("s2");
+        insert_section(
+            &conn,
+            "s1",
+            "l1",
+            "S1",
+            r#"[{"id":"sn1","kind":"markdown","content":"hi"}]"#,
+            0,
+        )
+        .expect("s1");
+        insert_practice(
+            &conn,
+            "p1",
+            "s1",
+            "f",
+            "def f():",
+            "p",
+            "sol",
+            0,
+            &reconcile::CheckableState::fresh(),
+        )
+        .expect("p1");
+        conn.execute(
+            "UPDATE practice SET skip=1, pass_or_fail=1, last_check='{\"passed\":1}' WHERE id='p1'",
+            [],
+        )
+        .unwrap();
+        insert_test_case(&conn, "c1", "practice", "p1", "[1]", "{}", "1", "exact", 0)
+            .expect("case");
+        insert_quiz(
+            &conn,
+            "q1",
+            "l1",
+            "g",
+            "def g():",
+            "",
+            "",
+            0,
+            &reconcile::CheckableState::fresh(),
+        )
+        .expect("q1");
+        let snap = snapshot_lesson_content(&conn, "l1").expect("snapshot");
+        let sec_ids: Vec<_> = snap.sections.iter().map(|s| s.id.as_str()).collect();
+        assert_eq!(sec_ids, ["s1", "s2"]);
+        assert_eq!(
+            snap.sections[0].snippets,
+            vec![(String::from("markdown"), String::from("hi"))]
+        );
+        let p = &snap.sections[0].practice[0];
+        assert_eq!(p.id, "p1");
+        assert!(p.state.skip && p.state.pass_or_fail);
+        assert_eq!(p.state.last_check, r#"{"passed":1}"#);
+        assert_eq!(p.cases[0].id, "c1");
+        assert_eq!(snap.quizzes[0].id, "q1");
     }
 
     #[test]
@@ -1438,8 +1653,30 @@ mod tests {
     fn quiz_and_note_rollups() {
         let conn = open(&tmp_db()).expect("open");
         insert_lesson(&conn, "l1", "l1", "L", 1, "t0", "t0").expect("lesson");
-        insert_quiz(&conn, "q1", "l1", "g", "def g():", "", "", 0).expect("quiz");
-        insert_quiz(&conn, "q2", "l1", "g", "def g():", "", "", 1).expect("quiz");
+        insert_quiz(
+            &conn,
+            "q1",
+            "l1",
+            "g",
+            "def g():",
+            "",
+            "",
+            0,
+            &reconcile::CheckableState::fresh(),
+        )
+        .expect("quiz");
+        insert_quiz(
+            &conn,
+            "q2",
+            "l1",
+            "g",
+            "def g():",
+            "",
+            "",
+            1,
+            &reconcile::CheckableState::fresh(),
+        )
+        .expect("quiz");
         // q1 passes, q2 skipped — skipped is excluded from the roll-up.
         conn.execute("UPDATE quizzes SET pass_or_fail=1 WHERE id='q1'", [])
             .unwrap();
