@@ -4,7 +4,11 @@
   assigned by carpenter, globally unique **within their table** (the `id` column is
   the PK). Assignment is `max+1` per table over existing numeric suffixes; deleted
   ids are **never reused**. SQLite `rowid` is ignored as a key. (The `a1` attempts
-  prefix was removed with that table — adr/010.)
+  prefix was removed with that table — adr/010.) **Exception — `lesson update
+  --force`:** children whose spec content is unchanged keep their ids **and** their
+  learner-state columns (`skip`, `pass_or_fail`, `last_check`); new or
+  content-edited children take fresh `max+1` allocation; ids of removed children
+  are still never reused.
 - **Foreign keys:** plain `<parent>_id` columns; `PRAGMA foreign_keys = ON`.
   **Exceptions (no FK, polymorphic/free refs):** `test_cases.owner_id` (→ practice
   or quiz, disambiguated by `owner_type`), `notes.related`, `plans.scope_id`,

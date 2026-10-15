@@ -14,3 +14,10 @@
 | `verify (<id> | --spec -) [--timeout <SECS>]` | LessonSpec (--spec) | — (<id>) | `{"lesson_id":"arrays-101","checked":1,"passing":1,"failing":0,"checkables":[{"owner_type":"practice","owner_id":"p1","name":"sum_array","has_solution":true,"passed":1,"total":1,"cases":[{"case_id":"c1","passed":true}]}]}` — runs each author `solution` vs its own cases; `--spec` is the pre-create key-lock, `<id>` re-verifies stored solutions |
 | `new [--out <FILE>]` | — | `{"yaml":"title: …\nsections: []\n"}` — emits a YAML lesson-spec template (block scalars + `solution`); stdout, or `--out` to write |
 <!-- END GENERATED -->
+
+In the `execute` envelope, `cells.total` counts executed code cells only
+(skip-config, section code, stubs, checks); markdown cells — title, section-md,
+question-md — are never executed and never counted. `errors[].index` is the
+full-notebook cell index (`notebook::scan_errors` enumerates all cells, markdown
+included), so `total < max(errors[].index)` is expected when markdown cells
+precede the errored code cell — not a miscount.
