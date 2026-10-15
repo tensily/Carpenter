@@ -37,12 +37,40 @@ fn unix_chmod(path: &Path) {
     std::fs::set_permissions(path, perms).unwrap();
 }
 
-/// Fake `opencode` on PATH so app detection is deterministic.
+/// The `PATH` value every installer lane runs under: the stub dir first, so
+/// the script's sole app probe (`command -v opencode`) resolves to the stub
+/// and never to a real host `opencode`.
+fn stub_path(root: &Path) -> String {
+    format!(
+        "{}:{}",
+        root.join("stub").display(),
+        std::env::var("PATH").unwrap_or_default()
+    )
+}
+
+/// Fake `opencode` on PATH so app detection is deterministic. Guards its own
+/// invariant: `command -v opencode` under [`stub_path`] must resolve to the
+/// stub — if a future edit drops the PATH prepend, the lane fails here
+/// immediately instead of silently running against the host's real
+/// `opencode` (the hang class behind issue #69).
 fn stub_opencode(root: &Path) {
     let stub = root.join("stub");
     std::fs::create_dir_all(&stub).unwrap();
     std::fs::write(stub.join("opencode"), "#!/bin/sh\nexit 0\n").unwrap();
     unix_chmod(&stub.join("opencode"));
+    let probe = Command::new("sh")
+        .arg("-c")
+        .arg("command -v opencode")
+        .env("PATH", stub_path(root))
+        .output()
+        .unwrap();
+    assert_eq!(
+        String::from_utf8_lossy(&probe.stdout).trim(),
+        stub.join("opencode").display().to_string(),
+        "PATH must resolve `opencode` to the stub, not a host install — \
+         otherwise app detection hits the real opencode and a lane can hang \
+         on its output"
+    );
 }
 
 fn run_installer(script: &Path, root: &Path, fixture: &Path) -> std::process::Output {
@@ -55,14 +83,7 @@ fn run_installer(script: &Path, root: &Path, fixture: &Path) -> std::process::Ou
                 format!("file://{}", fixture.display()),
             )
             .env("CARPENTER_INSTALL_DIR", root.join("bin"))
-            .env(
-                "PATH",
-                format!(
-                    "{}:{}",
-                    root.join("stub").display(),
-                    std::env::var("PATH").unwrap_or_default()
-                ),
-            ),
+            .env("PATH", stub_path(root)),
         "install.sh",
     )
 }
@@ -125,11 +146,35 @@ fn wait_deadline(child: &mut Child, deadline: Instant) -> Option<std::process::E
     }
 }
 
+/// Join reader threads bounded by `deadline`; `false` once it passed before
+/// all of them finished. A pump only sees EOF when every holder of the pipe
+/// write-ends closes them, so a grandchild that inherited them and outlives
+/// the child would block an unbounded `join` forever — past the deadline the
+/// caller was already enforcing. Callers panic with the transcript so the
+/// worst case is a red test with evidence, never a hang.
+fn join_bounded(readers: Vec<JoinHandle<()>>, deadline: Instant) -> bool {
+    for reader in readers {
+        loop {
+            if reader.is_finished() {
+                let _ = reader.join();
+                break;
+            }
+            if Instant::now() >= deadline {
+                return false;
+            }
+            std::thread::sleep(Duration::from_millis(20));
+        }
+    }
+    true
+}
+
 /// Spawn `cmd` with piped output and a hard deadline: kill the child and
 /// panic with its transcript on expiry, else return the captured
 /// [`std::process::Output`]. Reader threads drain the pipes while `try_wait`
-/// polls, so a chatty child cannot deadlock on a full pipe — and stdin is
-/// nulled explicitly (spawn inherits it, unlike `output()`).
+/// polls, so a chatty child cannot deadlock on a full pipe — their joins are
+/// bounded by the same deadline (a grandchild holding the write-ends must
+/// not hang past it) — and stdin is nulled explicitly (spawn inherits it,
+/// unlike `output()`).
 fn run_bounded(cmd: &mut Command, what: &str) -> std::process::Output {
     cmd.stdin(Stdio::null())
         .stdout(Stdio::piped())
@@ -143,8 +188,13 @@ fn run_bounded(cmd: &mut Command, what: &str) -> std::process::Output {
     ];
     let deadline = Instant::now() + INSTALL_TIMEOUT;
     let status = wait_deadline(&mut child, deadline);
-    for p in pumps {
-        let _ = p.join();
+    if !join_bounded(pumps, deadline) {
+        panic!(
+            "{what} pipe readers must finish within {INSTALL_TIMEOUT:?} — a \
+             grandchild likely inherited the pipe write-ends: {}{}",
+            stdout.lock().unwrap(),
+            stderr.lock().unwrap()
+        );
     }
     let Some(status) = status else {
         panic!(
@@ -401,14 +451,7 @@ impl Pty {
             .env("XDG_CONFIG_HOME", config_root(root))
             .env("CARPENTER_DOWNLOAD_BASE", download_base)
             .env("CARPENTER_INSTALL_DIR", bin_dir)
-            .env(
-                "PATH",
-                format!(
-                    "{}:{}",
-                    root.join("stub").display(),
-                    std::env::var("PATH").unwrap_or_default()
-                ),
-            )
+            .env("PATH", stub_path(root))
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
@@ -452,8 +495,10 @@ impl Pty {
 
     /// Wait for the child — bounded: a `script` wedged on a prompt no answer
     /// will reach fails with the transcript instead of hanging the binary —
-    /// then close stdin (an early close tears the pty down on macOS) and
-    /// return the full transcript (CRs stripped).
+    /// then close stdin (an early close tears the pty down on macOS), join
+    /// the readers bounded by the same deadline (a grandchild that inherited
+    /// the pipe write-ends must not hang past it), and return the full
+    /// transcript (CRs stripped).
     fn finish(mut self) -> String {
         let deadline = Instant::now() + PTY_TIMEOUT;
         if wait_deadline(&mut self.child, deadline).is_none() {
@@ -463,8 +508,13 @@ impl Pty {
             );
         }
         self.stdin.take(); // close stdin only after the child exited
-        for reader in self.readers.drain(..) {
-            let _ = reader.join();
+        let readers = std::mem::take(&mut self.readers);
+        if !join_bounded(readers, deadline) {
+            panic!(
+                "pty readers must finish within {PTY_TIMEOUT:?} — a grandchild \
+                 likely inherited the pipe write-ends: {}",
+                self.snapshot()
+            );
         }
         self.snapshot()
     }
