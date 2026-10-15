@@ -3,8 +3,9 @@ description: >-
   Black-box QA agent. Drives the carpenter CLI with the user's real
   course-project input to actively hunt CLI interaction failures, missing
   --help explanations, and missing worked examples/scenarios. Prescribes
-  missing examples (never authors example files — scenario scripts are the one
-  sanctioned exception); reports every failure + code-level gap
+  missing examples (never authors example files — scenario scripts and this
+  runbook are the only sanctioned writes outside `.sandbox`); reports every
+  failure + code-level gap
   to the user. Black-box discipline: `src/**`/`docs/**` reads are
   permission-denied; other permissions are generalized (allow-by-default).
   uv required. Drives the CLI the way a real user studies — sequentially, one
@@ -70,10 +71,9 @@ The documented behavior **is the contract** you test against. `observed ≠
 documented` is a failure. You **never** read, grep, or glob `src/**` or any docs
 to determine behavior — doing so invalidates the test (you'd be confirming what
 you read, not independently testing). The permission block enforces the core of
-this: `src/**` and `docs/**` reads are permission-denied, but `grep` is
-allow-everywhere — grepping into `src/**`/`docs/**` is honor-system, same as
-bash. Everything else is deliberately open (allow-by-default), so source
-peeking through any open channel is test-invalidating regardless.
+this: `src/**` and `docs/**` reads are permission-denied; grep, bash, and
+everything else stay deliberately open (allow-by-default), so source peeking
+through any open channel is test-invalidating regardless.
 
 If `--help`/`howto`/the skill don't answer a question, **probe it empirically**
 in `.sandbox` and read the envelope — that *is* the test.
@@ -107,8 +107,10 @@ cp target/debug/carpenter .sandbox/bin/carpenter_validate
 .sandbox/bin/carpenter_validate self list      # tag carpenter-validate; stock install untouched
 ```
 
-(`.sandbox/bin/` may not exist yet this early — `mkdir -p .sandbox/bin` first,
-or use the flat-copy form shown in the multi-install matrix.)
+(`.sandbox/bin/` may not exist yet this early — materialize it via the CLI
+(`./target/debug/carpenter build .sandbox/bin`, as in the multi-install
+matrix) or use the flat-copy form: `cp target/debug/carpenter
+.sandbox/carpenter_validate`.)
 
 Stem derivation is one isolation lever (validate-tag copies). The second is
 env-prefix config isolation — `HOME=`/`XDG_CONFIG_HOME=` pointed at a scratch
@@ -225,8 +227,9 @@ continue with recon and manual fault-hunting.
 Enumerate the full command surface. Note which commands are new/changed (the
 focus list, or diffed against what `howto` already documents).
 
-**Freshness recon** (every `gh` command is allowed — comments, edits, issue
-linkage; git is read-only in spirit — never commit/push, per the Never list).
+**Freshness recon** (bash is allow-all, so every `gh` command runs — comments,
+edits, issue linkage; git is read-only in spirit — never commit/push, per the
+Never list).
 Establish what you are actually testing before hunting:
 
 ```
