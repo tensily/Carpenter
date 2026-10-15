@@ -147,9 +147,11 @@ jobs:
           REPO: ${{ github.repository }}
         run: |
           set -eu
+          # --limit: gh's default cap is 30 — "every merged branch" silently
+          # meant "30 most recent". Same cap applies to the open-PR keep-list.
           merged=$(gh pr list --repo "$REPO" --base nightly --state merged \
-            --json headRefName --jq 'map(.headRefName) | unique | .[]')
-          open=$(gh pr list --repo "$REPO" --state open \
+            --limit 500 --json headRefName --jq 'map(.headRefName) | unique | .[]')
+          open=$(gh pr list --repo "$REPO" --state open --limit 500 \
             --json headRefName --jq 'map(.headRefName) | unique | join(" ")')
           keep=" nightly main $open "
           while IFS= read -r branch; do
@@ -168,8 +170,8 @@ jobs:
           done <<<"$merged"
 
 
-  # Smoke (adr/019 testing tier): verify the release artifact via the real
-  # installer pipeline — tarball, checksum, install.sh, register — on a clean
+  # Smoke: verify the release artifact via the real installer pipeline —
+  # tarball, checksum, install.sh, register — on a clean
   # runner, not just the repo tests (which run against a local file://
   # fixture). Triple-mode:
   #   - push/nightly: the PUBLISHED nightly artifact via the literal nightly
