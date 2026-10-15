@@ -1,0 +1,78 @@
+/* carpenter TUI wireframe — app-frame layout.
+   Structural classes only: .c-frame .c-header .c-main .c-keybar .c-screen.
+   Component visuals live in components.css. Tokens are referenced
+   exclusively via var(--…). */
+
+/* body-level frame: header / main / keybar rows, centered column */
+.c-frame {
+  box-sizing: border-box;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  min-height: 100vh;
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 0 var(--space-5);
+  border-inline: 1px solid var(--line);
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-mono), var(--font-sans);
+  font-size: var(--text-md);
+  line-height: 1.5;
+}
+
+/* brand row: app name, course context, nav */
+.c-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 var(--space-4);
+  padding: var(--space-4) 0;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+}
+
+.c-header strong {
+  font-size: var(--text-lg);
+  letter-spacing: -0.01em;
+}
+
+.c-header nav {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2) var(--space-3);
+  margin-left: auto;
+}
+
+/* screen container */
+.c-main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: var(--space-5) 0 var(--space-6);
+}
+
+/* one block per screen */
+.c-screen {
+  display: block;
+}
+
+.c-screen[hidden] {
+  display: none;
+}
+
+.c-screen > * + * {
+  margin-top: var(--space-5);
+}
+
+/* muted footer strip for kbd hints */
+.c-keybar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2) var(--space-4);
+  padding: var(--space-3) 0;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: var(--text-sm);
+}

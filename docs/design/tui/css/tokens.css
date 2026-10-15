@@ -1,0 +1,39 @@
+/* carpenter TUI wireframe — theme tokens.
+   Light minimal palette, monospace-flavored. System fonts only; no webfont
+   loads. Custom-property names are a contract: every other stylesheet
+   references them exclusively via var(--…). */
+
+:root {
+  /* color */
+  --bg: #faf9f7;         /* warm near-white page background */
+  --surface: #ffffff;    /* panels, cards, inputs */
+  --ink: #211f1d;        /* primary text, near-black */
+  --muted: #6f6a64;      /* secondary text, hints, keybar */
+  --line: #e6e2dc;       /* hairline borders and dividers */
+  --accent: #4f46e5;     /* restrained indigo — primary actions, links, focus */
+  --accent-ink: #ffffff; /* text/icons placed on accent */
+  --ok: #3d7a50;         /* success */
+  --warn: #a16207;       /* caution */
+  --err: #b03a34;        /* errors, destructive */
+
+  /* shape */
+  --radius: 6px;    /* panels, inputs, buttons */
+  --radius-sm: 3px; /* chips, badges, kbd */
+
+  /* spacing scale */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+
+  /* type — mono leads the UI flavor; sans is the system fallback */
+  --font-mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas,
+    "Liberation Mono", monospace;
+  --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial,
+    sans-serif;
+  --text-sm: 0.8125rem;
+  --text-md: 0.9375rem;
+  --text-lg: 1.125rem;
+}
