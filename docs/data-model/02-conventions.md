@@ -36,7 +36,8 @@
 3. trim leading/trailing `-`;
 4. truncate to 60 chars (trim again if it ends mid-run with `-`);
 5. on collision with an existing slug within the scope, append `-2`, `-3`, … until
-   unique.
+   unique (**derived** slugs only — a provided slug that already exists is an
+   `AlreadyExists` error, never uniquified).
 
 A slug with no alphanumerics after step 2 ⇒ `ValidationError` (cannot derive).
 
