@@ -1,0 +1,500 @@
+/* carpenter TUI wireframe — component classes + states.
+   Contract: docs/design/tui. Every var() is a tokens.css contract name;
+   colors are derived with color-mix, never hard-coded. Light minimal:
+   1px --line borders, --radius corners, --space rhythm, mono-flavored
+   type; selection/active uses an --accent border or left bar, not fills. */
+
+/* ---- panel: bordered titled box ---- */
+.c-panel {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.c-panel__head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--line);
+}
+
+.c-panel__title {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink);
+}
+
+.c-panel__body {
+  padding: var(--space-4);
+}
+
+/* ---- buttons ---- */
+.c-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--ink);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  line-height: 1.3;
+  cursor: pointer;
+}
+
+.c-btn--primary {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+.c-btn--ghost {
+  border-color: transparent;
+  background: transparent;
+  color: var(--muted);
+}
+
+.c-btn--danger {
+  border-color: color-mix(in srgb, var(--err) 45%, var(--line));
+  background: var(--surface);
+  color: var(--err);
+}
+
+.c-btn:hover:not([disabled]) {
+  border-color: var(--ink);
+}
+
+.c-btn--primary:hover:not([disabled]) {
+  border-color: color-mix(in srgb, var(--accent) 65%, var(--ink));
+  background: color-mix(in srgb, var(--accent) 88%, var(--ink));
+}
+
+.c-btn--ghost:hover:not([disabled]) {
+  border-color: var(--line);
+  background: var(--surface);
+  color: var(--ink);
+}
+
+.c-btn--danger:hover:not([disabled]) {
+  border-color: var(--err);
+  background: color-mix(in srgb, var(--err) 8%, transparent);
+}
+
+.c-btn[disabled] {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* ---- kbd: keycap chip ---- */
+.c-kbd {
+  display: inline-block;
+  padding: 0 var(--space-2);
+  border: 1px solid var(--line);
+  border-bottom-width: 2px;
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  line-height: 1.6;
+}
+
+/* ---- field: label + control wrapper ---- */
+.c-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.c-field > label {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  color: var(--muted);
+}
+
+/* ---- input / textarea: bordered mono controls ---- */
+.c-input,
+.c-textarea {
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-mono);
+  font-size: var(--text-md);
+  line-height: 1.5;
+}
+
+.c-textarea {
+  resize: vertical;
+}
+
+.c-input::placeholder,
+.c-textarea::placeholder {
+  color: var(--muted);
+}
+
+.c-input:focus-visible,
+.c-textarea:focus-visible {
+  border-color: var(--accent);
+}
+
+/* ---- chips: selectable pills ---- */
+.c-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.c-chip {
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  line-height: 1.6;
+  cursor: pointer;
+}
+
+.c-chip:hover {
+  border-color: var(--ink);
+  color: var(--ink);
+}
+
+.c-chip--on {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 9%, transparent);
+  color: var(--accent);
+}
+
+/* ---- stepper: numbered step indicator ---- */
+.c-stepper {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: step;
+}
+
+.c-step {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  counter-increment: step;
+}
+
+.c-step::before {
+  content: counter(step);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.6em;
+  height: 1.6em;
+  padding: 0 var(--space-1);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+}
+
+.c-step--active {
+  color: var(--ink);
+}
+
+.c-step--active::before {
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.c-step--done::before {
+  content: "✓";
+  border-color: var(--ok);
+  color: var(--ok);
+}
+
+/* ---- list: rows with dividers ---- */
+.c-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.c-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: var(--text-md);
+}
+
+.c-row:last-child {
+  border-bottom: none;
+}
+
+.c-row--clickable {
+  cursor: pointer;
+}
+
+.c-row--clickable:hover {
+  background: color-mix(in srgb, var(--accent) 5%, var(--surface));
+}
+
+.c-row--selected {
+  box-shadow: inset 2px 0 0 var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, var(--surface));
+}
+
+/* ---- badge: small pill, tinted per status / note kind ---- */
+.c-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 0 var(--space-2);
+  border: 1px solid color-mix(in srgb, currentColor 30%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, currentColor 10%, transparent);
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  line-height: 1.6;
+  white-space: nowrap;
+}
+
+.c-badge--planned,
+.c-badge--skipped {
+  color: var(--muted);
+}
+
+.c-badge--created,
+.c-badge--pattern {
+  color: var(--accent);
+}
+
+.c-badge--verified,
+.c-badge--confirmed,
+.c-badge--strength,
+.c-badge--progress {
+  color: var(--ok);
+}
+
+.c-badge--draft,
+.c-badge--mistake {
+  color: var(--warn);
+}
+
+.c-badge--gap {
+  color: var(--err);
+}
+
+/* ---- progress: thin accent bar ---- */
+.c-progress {
+  width: 100%;
+  height: 4px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--muted) 25%, transparent);
+  overflow: hidden;
+}
+
+.c-progress__fill {
+  width: 0;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--accent);
+}
+
+/* ---- empty: muted empty-state block ---- */
+.c-empty {
+  display: grid;
+  place-items: center;
+  gap: var(--space-2);
+  padding: var(--space-6) var(--space-4);
+  border: 1px dashed var(--line);
+  border-radius: var(--radius);
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  text-align: center;
+}
+
+/* ---- note: feedback card with kind badge slot ---- */
+.c-note {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  font-size: var(--text-md);
+}
+
+/* ---- diff rows: tint + left bar per change kind ---- */
+.c-diff-row {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border-left: 3px solid currentColor;
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, currentColor 8%, transparent);
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  overflow-wrap: anywhere;
+}
+
+.c-diff-row--add {
+  color: var(--ok);
+}
+
+.c-diff-row--del {
+  color: var(--err);
+}
+
+.c-diff-row--mod {
+  color: var(--warn);
+}
+
+/* ---- modal: fixed overlay, shown via [open] ---- */
+.c-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-4);
+  background: color-mix(in srgb, var(--ink) 25%, transparent);
+}
+
+.c-modal[open] {
+  display: flex;
+}
+
+.c-modal__box {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  width: min(34rem, 100%);
+  max-height: calc(100vh - var(--space-6) * 2);
+  overflow: auto;
+  padding: var(--space-5);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: 0 1rem 2rem color-mix(in srgb, var(--ink) 20%, transparent);
+}
+
+/* ---- toast: fixed bottom-right, slide-in ---- */
+.c-toast {
+  position: fixed;
+  right: var(--space-4);
+  bottom: var(--space-4);
+  z-index: 50;
+  max-width: min(28rem, calc(100vw - var(--space-6)));
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--line);
+  border-left: 3px solid currentColor;
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  box-shadow: 0 0.5rem 1.5rem color-mix(in srgb, var(--ink) 18%, transparent);
+  color: var(--ink);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  animation: c-toast-in 0.18s ease-out;
+}
+
+.c-toast--ok {
+  color: var(--ok);
+}
+
+.c-toast--err {
+  color: var(--err);
+}
+
+@keyframes c-toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(var(--space-3));
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .c-toast {
+    animation: none;
+  }
+}
+
+/* ---- actions: horizontal button row, right-align friendly ---- */
+.c-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+
+/* ---- kv: key/value grid rows (mono values) ---- */
+.c-kv {
+  display: grid;
+  grid-template-columns: minmax(9em, max-content) 1fr;
+  gap: var(--space-2) var(--space-4);
+  align-items: baseline;
+  font-size: var(--text-md);
+}
+
+.c-kv > dt,
+.c-kv > dd {
+  margin: 0;
+}
+
+.c-kv > :nth-child(odd) {
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+
+.c-kv > :nth-child(even) {
+  color: var(--ink);
+  font-family: var(--font-mono);
+  overflow-wrap: anywhere;
+}
+
+/* ---- shared interaction polish ---- */
+.c-btn,
+.c-chip,
+.c-row--clickable {
+  transition: background-color 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+}
+
+.c-btn:focus-visible,
+.c-chip:focus-visible,
+.c-input:focus-visible,
+.c-textarea:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.c-row--clickable:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
