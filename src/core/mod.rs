@@ -12,6 +12,7 @@ pub mod helper;
 pub mod installs;
 pub mod notebook;
 pub mod output;
+pub mod reconcile;
 pub mod release;
 pub mod skill;
 pub mod status;
