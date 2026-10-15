@@ -201,7 +201,7 @@ fn opencode_root() -> Result<PathBuf, CarpenterError> {
 /// repo's `.opencode/skills/carpenter/SKILL.md`. Idempotent; re-run to refresh.
 /// Mirrors release `register`'s skill write; the permission auto-allow is
 /// intentionally NOT merged here (it would dirty the tracked `opencode.json` —
-/// the dev-validate agent already carries `skill: allow`, and a globally
+/// the QA agent already carries `skill: allow`, and a globally
 /// `register`-ed carpenter skill covers the `carpenter` name for other agents).
 pub fn register_local() -> Result<Data, CarpenterError> {
     let root = opencode_root()?;

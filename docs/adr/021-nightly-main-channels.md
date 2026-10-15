@@ -11,7 +11,7 @@ contributors must keep straight. On top of that, the owner wanted merge approval
 into the canary channel to be his alone, and every merge into the canary to
 clear an explicit quality bar: tests green, tests for new features, an updated
 QA-agent checklist when the surface moves, a plain explanation of the feature,
-and a carpenter-dev-validate report proving the subject-learning simulation
+and a QA report proving the subject-learning simulation
 still runs smoothly.
 
 ## Decision
@@ -38,10 +38,10 @@ nightly ──PR──▶ main           promotion; publishes immutable stable v
   at review):
   1. all unit tests pass;
   2. new features ship with unit tests;
-  3. the carpenter-dev-validate agent checklist/prompt is updated when the CLI
+  3. the QA agent checklist/prompt is updated when the CLI
      surface or study workflow changes;
   4. the PR explains what the feature does;
-  5. a carpenter-dev-validate report is attached — the learning simulation ran
+  5. a QA report is attached — the learning simulation ran
      smoothly over existing and new features.
   The validate gate is deliberately manual: the agent is interactive and
   LLM-driven, so CI cannot run it honestly; the owner's review is the
@@ -67,7 +67,7 @@ nightly ──PR──▶ main           promotion; publishes immutable stable v
 - **Timed/cron nightly cuts** — still rejected (as in adr/020): a merge encodes
   "this is ready" better than a clock. `nightly` is the channel name, not a
   schedule.
-- **Automating carpenter-dev-validate in CI** — needs an LLM key, is slow and
+- **Automating the QA agent in CI** — needs an LLM key, is slow and
   non-deterministic, and the agent is interactive by design; a CI rerun would
   test something other than what the report requires.
 - **Keeping `edge` as an alias** — two names for one channel; no clarity gain.

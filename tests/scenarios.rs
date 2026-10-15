@@ -1,5 +1,5 @@
 //! e2e scenario scripts (`tests/scenarios/*.sh`) — recorded, validated probe
-//! sequences from carpenter-dev-validate passes. **Local-only by design**:
+//! sequences from QA-agent passes. **Local-only by design**:
 //! every test here is `#[ignore]`, so plain `cargo test` (and therefore CI)
 //! skips them; the agent runs them selectively before manual fault-hunting:
 //!
