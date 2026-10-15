@@ -80,19 +80,32 @@ pub fn envelope_examples() -> Vec<(&'static str, Data)> {
 }
 
 /// Build a 3-column output-contract table from `(cmd, input, note, data)` rows;
-/// the `data` cell is the serialized variant + the authored note.
+/// the `data` cell is the serialized variant + the authored note. Generated
+/// cells are pipe-escaped (`\|`) so a `|` in a cmd/input/JSON value stays one
+/// GFM cell; authored notes escape their own pipes (see
+/// `lesson::examples::rows`).
 fn output_table(rows: Vec<(&'static str, &'static str, &'static str, Data)>) -> String {
     let mut table = String::from("| cmd | input | `data` (ok) |\n|-----|-------|-------------|\n");
     for (cmd, input, note, data) in rows {
-        let json = serde_json::to_string(&data).unwrap_or_default();
+        let json = escape_pipes(&serde_json::to_string(&data).unwrap_or_default());
         let cell = if note.is_empty() {
             format!("`{json}`")
         } else {
             format!("`{json}` — {note}")
         };
-        table.push_str(&format!("| `{cmd}` | {input} | {cell} |\n"));
+        table.push_str(&format!(
+            "| `{}` | {} | {cell} |\n",
+            escape_pipes(cmd),
+            escape_pipes(input)
+        ));
     }
     table.trim_end().to_string()
+}
+
+/// Escape GFM table-cell pipes so a value containing `|` renders as a literal
+/// pipe instead of splitting the row.
+fn escape_pipes(s: &str) -> String {
+    s.replace('|', "\\|")
 }
 
 /// The `howto` success-payload example (shared by its spec entry + the envelope smoke).

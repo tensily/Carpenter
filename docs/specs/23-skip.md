@@ -9,8 +9,8 @@ notebook's `managed=skip-config` cell (`_skip_config()`, read-only, reads
 <!-- BEGIN GENERATED -->
 | cmd | input | `data` (ok) |
 |-----|-------|-------------|
-| `skip --scope lesson|quiz|practice <id>` | id + scope | `{"scope":"quiz","id":"q1","skip":true}` — `NotFound` if the id does not exist under the scope |
-| `skip --scope lesson|quiz|practice <id> --off` | id + scope | `{"scope":"quiz","id":"q1","skip":false}` — clears the flag |
+| `skip --scope lesson\|quiz\|practice <id>` | id + scope | `{"scope":"quiz","id":"q1","skip":true}` — `NotFound` if the id does not exist under the scope |
+| `skip --scope lesson\|quiz\|practice <id> --off` | id + scope | `{"scope":"quiz","id":"q1","skip":false}` — clears the flag |
 <!-- END GENERATED -->
 
 - `NotFound` if the id does not exist under the given scope.

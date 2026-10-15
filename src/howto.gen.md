@@ -1305,6 +1305,20 @@ Place the carpenter binary into a bin dir.
 
 - `--bin-dir <PATH>` — Bin dir (default: config bin_dir -> ~/.local/bin).
 
+**example:**
+
+```sh
+carpenter self install --bin-dir ~/.local/bin
+```
+
+Result (one envelope on stdout):
+```json
+{"status":"ok","message":"installed: /home/u/.local/bin/carpenter","data":{"installed":true,"already_present":false,"bin":"/home/u/.local/bin/carpenter","on_path":true}}
+```
+
+Default bin dir from config (`bin_dir` → ~/.local/bin). `already_present` is
+true when the target binary existed before this install (re-install).
+
 ### upgrade
 
 Replace the installed binary from a published release (or a source checkout) and refresh the skill.
@@ -1314,6 +1328,24 @@ Replace the installed binary from a published release (or a source checkout) and
 - `--bin-dir <PATH>` — Install target (default: config bin_dir).
 - `--no-skill` — Skip the skill auto-refresh (skill:null).
 
+**example:**
+
+```sh
+carpenter self upgrade --bin-dir ~/.local/bin
+```
+
+Result (one envelope on stdout):
+```json
+{"status":"ok","message":"upgraded: 0.12.0","data":{"upgraded":true,"version":"0.12.0","bin":"/home/u/.local/bin/carpenter","source":"https://github.com/tensily/Carpenter/releases/latest/download/carpenter-x86_64-unknown-linux-musl.tar.gz","skill":[{"refreshed":true,"app":"opencode","path":"/home/u/.config/opencode/skills/carpenter/SKILL.md"}]}}
+```
+
+Fetches the latest **stable** release (checksum-verified), replaces the binary, and
+refreshes the skill if **registered** (`skill` = the refresh outcome;
+nothing registered ⇒ `{"refreshed":false,"reason":"not_registered",…}`).
+`--channel nightly` follows the rolling prerelease instead; `--source <path>` (or
+config `source_dir`) rebuilds from a local checkout. `--no-skill` skips the
+skill write (`skill:null`).
+
 ### uninstall
 
 Remove the carpenter skill, the installed binary, and (with --purge-config) the config. Prints a removal plan and asks for confirmation; --yes skips.
@@ -1322,11 +1354,45 @@ Remove the carpenter skill, the installed binary, and (with --purge-config) the 
 - `--purge-config` — Also remove the carpenter config file.
 - `--yes` — Skip the confirmation prompt (non-interactive removal).
 
+**example:**
+
+```sh
+carpenter self uninstall --bin-dir ~/.local/bin --yes
+```
+
+Result (one envelope on stdout):
+```json
+{"status":"ok","message":"uninstalled: /home/u/.local/bin/carpenter","data":{"uninstalled":true,"bin":"/home/u/.local/bin/carpenter","skill":[{"app":"opencode","path":"/home/u/.config/opencode/skills/carpenter/SKILL.md","removed":true}],"config_purged":false}}
+```
+
+Inverse of `install`: without `--yes`, prints a removal plan (binary, skill
+path, config, kept data dir) to stderr and confirms on stdin — decline
+or EOF ⇒ `Conflict`, nothing removed. Confirmed, it removes the skill if
+**registered** (best-effort — `{"removed":false,"reason":"not_registered"}`
+when not), then deletes `<bin_dir>/carpenter` (safe while running on
+Linux/macOS). `NotFound` only when no skill, binary, **or** data dir exists.
+`--purge-config` also removes the running tag's config file; course data is
+never touched. The skill is machine-global per tag — `--bin-dir` scopes only the
+binary.
+
 ### register
 
 Register the carpenter skill with opencode (writes SKILL.md + a permission entry).
 
 - `--print-skill` — Print the rendered SKILL.md to stdout instead of writing.
+
+**example:**
+
+```sh
+carpenter self register
+```
+
+Result (one envelope on stdout):
+```json
+{"status":"ok","message":"skill registered: opencode","data":{"app":"opencode","path":"/…/opencode/skills/carpenter/SKILL.md","version":"0.12.0","installed":true}}
+```
+
+Writes `SKILL.md` + merges the `permission.skill.carpenter="allow"` entry. `--print-skill` prints the rendered bytes instead (no FS change).
 
 ### deregister
 
@@ -1334,11 +1400,46 @@ Deregister the carpenter skill (removes SKILL.md + the permission entry). Prints
 
 - `--yes` — Skip the confirmation prompt (non-interactive removal).
 
+**example:**
+
+```sh
+carpenter self deregister --yes
+```
+
+Result (one envelope on stdout):
+```json
+{"status":"ok","message":"skill deregistered: opencode","data":{"app":"opencode","path":"/…/opencode/skills/carpenter/SKILL.md","removed":true}}
+```
+
+Removes `SKILL.md` (+ dir if empty) and the allow key. NotFound if absent.
+Without `--yes` a plan (the machine-global skill path opencode reads) is
+printed to stderr and confirmed on stdin — decline or EOF ⇒ `Conflict`,
+nothing removed.
+
 ### list
 
 List carpenter installs on this machine (binaries, skills, data dirs).
 
 - `--bin-dir <PATH>` — Bin dir (default: config bin_dir -> ~/.local/bin).
+
+**example:**
+
+```sh
+carpenter self list
+```
+
+Result (one envelope on stdout):
+```json
+{"status":"ok","message":"installs listed","data":{"installs":[{"tag":"carpenter","bin":"/home/u/.local/bin/carpenter","skill_apps":["opencode"],"data_dir":"/home/u/.config/carpenter"},{"tag":"carpenter-ivan-topic","bin":"/home/u/.local/bin/carpenter-ivan-topic","skill_apps":["opencode"],"data_dir":"/home/u/.config/carpenter-ivan-topic"}]}}
+```
+
+Discovers every carpenter install on this machine, keyed by its **tag** (the
+binary's file stem — adr/027): `carpenter` is the stock install; a branch
+install carries its branch name. The union of `carpenter*` binaries in
+`bin_dir`, registered skill dirs under either agent app, and data dirs under
+the config base; sorted by tag. A row's `data_dir` is the path the tag derives
+to even when it does not exist yet, and `bin` is `null` when only a skill or
+data dir remains.
 
 ### remove
 
@@ -1348,11 +1449,44 @@ Uninstall any carpenter install by tag (skill + binary + config purge). Prints a
 - `--purge-config` — Also remove the target install's config file.
 - `--yes` — Skip the confirmation prompt (non-interactive removal).
 
+**example:**
+
+```sh
+carpenter self remove carpenter-ivan-topic --yes
+```
+
+Result (one envelope on stdout):
+```json
+{"status":"ok","message":"install removed: carpenter-ivan-topic","data":{"removed":true,"tag":"carpenter-ivan-topic","bin":"/home/u/.local/bin/carpenter-ivan-topic","skill":[{"app":"opencode","path":"/home/u/.config/opencode/skills/carpenter-ivan-topic/SKILL.md","removed":true}],"config_purged":false}}
+```
+
+Generic uninstall: removes **any** install by tag — the tagged binary, its
+skill from every app that registered it, and (with `--purge-config`) its
+config file — regardless of which carpenter is running the command. Same
+adr/019 semantics as `uninstall` (course data is never touched; `NotFound`
+when the tag has no skill, binary, **or** data dir); the tag must be
+kebab-case (`^[a-z0-9]+(-[a-z0-9]+)*$`, max 60). Without `--yes` a removal
+plan is printed to stderr and confirmed on stdin — decline or EOF ⇒
+`Conflict`, nothing removed.
+
 ### link
 
 Emit the future CLI registry manifest.
 
 _flags: none_
+
+**example:**
+
+```sh
+carpenter self link
+```
+
+Result (one envelope on stdout):
+```json
+{"status":"ok","message":"link manifest emitted","data":{"name":"carpenter","version":"0.12.0","bin":"/…/carpenter","summary":"Agent-driven CLI that builds Python/Jupyter learning material.","howto_excerpt":"Run `carpenter howto` for the full, always-current command manual.","commands":["course","lesson","plan","quiz","howto"]}}
+```
+
+Future CLI registry manifest. Read-only emit.
 
 ## Scenarios
 
