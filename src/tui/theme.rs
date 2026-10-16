@@ -33,6 +33,31 @@ pub fn selected() -> Style {
         .add_modifier(Modifier::BOLD)
 }
 
+/// Brand text (the header's `carpenter`).
+pub fn brand() -> Style {
+    Style::new().fg(ACCENT).add_modifier(Modifier::BOLD)
+}
+
+/// Keycap hint text (the keybar's key names).
+pub fn hint() -> Style {
+    Style::new().fg(ACCENT)
+}
+
+/// Active-course marker (`★`).
+pub fn marker() -> Style {
+    Style::new().fg(OK)
+}
+
+/// Error text (corrupt rows, `✗` status line).
+pub fn err_text() -> Style {
+    Style::new().fg(ERR)
+}
+
+/// Muted text (counts, empty states).
+pub fn muted_text() -> Style {
+    Style::new().fg(MUTED)
+}
+
 /// Style for a screen tab: current vs idle.
 pub fn tab(current: bool) -> Style {
     if current {
@@ -47,13 +72,13 @@ pub fn badge(color: Color) -> Style {
     Style::new().fg(color).add_modifier(Modifier::BOLD)
 }
 
-/// Color for a lesson/plan status (`planned created verified skipped draft confirmed`).
+/// Color for a lesson/plan status (`planned created verified skipped draft confirmed`,
+/// plus the derived progress statuses `complete in_progress achieved`).
 #[allow(dead_code)] // screen-batch kit (design/20)
 pub fn status(status: &str) -> Color {
     match status {
         "verified" | "confirmed" | "complete" | "achieved" => OK,
         "created" | "in_progress" => WARN,
-        "skipped" => MUTED,
         _ => MUTED,
     }
 }

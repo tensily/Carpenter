@@ -2,10 +2,10 @@
 //! `c-*` component library (one place per visual pattern, never inline styles
 //! at call sites).
 //!
-//! The kit is landed with the skeleton as the screen-batch contract
-//! (design/20); entries not yet consumed by a shipped screen carry
-//! `allow(dead_code)` until their unit lands.
-#![allow(dead_code)]
+//! Kit entries not yet consumed by a shipped screen carry a per-item
+//! `allow(dead_code) // screen-batch kit (design/20)`, like theme.rs — the
+//! blanket form would permanently exempt this module (the batch's landing
+//! pad) from the dead-code gate.
 
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Block;
@@ -18,6 +18,7 @@ pub fn titled(title: &str) -> Block<'_> {
 }
 
 /// A `[████░░] 22%` progress line `width` cells wide.
+#[allow(dead_code)] // screen-batch kit (design/20)
 pub fn progress(pct: u32, width: usize) -> String {
     let pct = pct.clamp(0, 100);
     let filled = (width * pct as usize) / 100;
@@ -31,31 +32,32 @@ pub fn progress(pct: u32, width: usize) -> String {
     bar
 }
 
-/// A `● label` status/kind badge span in the status's theme color.
+/// A `● label` status/kind badge span in the given theme color.
+#[allow(dead_code)] // screen-batch kit (design/20)
 pub fn badge(color: ratatui::style::Color, label: &str) -> Span<'_> {
     Span::styled(format!("● {label}"), theme::badge(color))
 }
 
-/// The global key-hint footer.
+/// The global key-hint footer, from the design/20 key-map table.
 pub fn keybar() -> Line<'static> {
-    Line::from(vec![
-        Span::styled("←/→", hint()),
-        Span::raw(" screens  "),
-        Span::styled("↑/↓", hint()),
-        Span::raw(" move  "),
-        Span::styled("Enter", hint()),
-        Span::raw(" apply  "),
-        Span::styled("n", hint()),
-        Span::raw(" new course  "),
-        Span::styled("p", hint()),
-        Span::raw(" pivot  "),
-        Span::styled("q", hint()),
-        Span::raw(" quit"),
-    ])
-}
-
-fn hint() -> ratatui::style::Style {
-    ratatui::style::Style::new().fg(theme::ACCENT)
+    const HINTS: [(&str, &str); 6] = [
+        ("←/→", "screens"),
+        ("↑/↓", "move"),
+        ("Enter", "apply"),
+        ("n", "new course"),
+        ("p", "pivot"),
+        ("q", "quit"),
+    ];
+    let spans: Vec<Span> = HINTS
+        .iter()
+        .flat_map(|(key, label)| {
+            [
+                Span::styled((*key).to_string(), theme::hint()),
+                Span::raw(format!(" {label}  ")),
+            ]
+        })
+        .collect();
+    Line::from(spans)
 }
 
 #[cfg(all(test, feature = "tui"))]

@@ -9,16 +9,19 @@
 //!
 //! Terminal contract: the TUI renders to **stderr**; stdout stays reserved for
 //! the one JSON envelope `app::run` prints after the session ends. Raw mode +
-//! the alternate screen are restored by a Drop guard on every path.
+//! the alternate screen are restored by a Drop guard on every path. The loop
+//! redraws only after an event — nothing animates, so idle input costs no
+//! draws.
 
 mod app;
 mod router;
 mod screens;
+#[cfg(all(test, feature = "tui"))]
+pub(crate) mod testsupport;
 mod theme;
 mod widgets;
 
 use std::io;
-use std::time::Duration;
 
 use crossterm::event::{self, Event, KeyEventKind};
 use crossterm::terminal::{
@@ -33,9 +36,6 @@ use crate::models::Data;
 
 use app::Session;
 
-/// How long the event loop waits for input before the next draw.
-const POLL: Duration = Duration::from_millis(150);
-
 /// Run one TUI session: set up the terminal, loop until quit, restore, and
 /// return the exit payload. Terminal IO failures map to
 /// [`CarpenterError::StoreError`] (the environment-failure class); screen-level
@@ -48,13 +48,10 @@ pub fn run(paths: &Paths) -> Result<Data, CarpenterError> {
     session.enter(paths);
     while !session.done {
         terminal.draw(|frame| session.draw(frame)).map_err(io_err)?;
-        if !event::poll(POLL).map_err(io_err)? {
-            continue;
-        }
-        if let Event::Key(key) = event::read().map_err(io_err)? {
-            if key.kind == KeyEventKind::Press {
-                session.key(key, paths);
-            }
+        match event::read().map_err(io_err)? {
+            Event::Key(key) if key.kind == KeyEventKind::Press => session.key(key, paths),
+            Event::Resize(_, _) => {}
+            _ => {}
         }
     }
     Ok(session.exit())

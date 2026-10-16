@@ -54,7 +54,7 @@ impl Screen for Home {
             .iter()
             .map(|course| {
                 let marker = match &self.active {
-                    Some(active) if *active == course.slug => Span::styled("★ ", theme_selected()),
+                    Some(active) if *active == course.slug => Span::styled("★ ", theme::marker()),
                     _ => Span::raw("  "),
                 };
                 ListItem::new(Line::from(vec![
@@ -67,7 +67,7 @@ impl Screen for Home {
                     Span::raw("  "),
                     Span::styled(
                         format!("{} lessons", course.lessons_count),
-                        ratatui::style::Style::new().fg(theme::MUTED),
+                        theme::muted_text(),
                     ),
                 ]))
             })
@@ -77,13 +77,13 @@ impl Screen for Home {
             let id = e.id.as_deref().unwrap_or("?");
             items.push(ListItem::new(Line::from(vec![Span::styled(
                 format!("✗ corrupt course row ({}): {}", id, e.reason),
-                ratatui::style::Style::new().fg(theme::ERR),
+                theme::err_text(),
             )])));
         }
         if items.is_empty() {
             items.push(ListItem::new(Line::from(Span::styled(
                 "no courses yet — press n to scaffold one",
-                ratatui::style::Style::new().fg(theme::MUTED),
+                theme::muted_text(),
             ))));
         }
         let list = List::new(items)
@@ -112,7 +112,11 @@ impl Screen for Home {
                     return true;
                 };
                 let slug = course.slug.clone();
-                ctx.run(move |paths| crate::commands::course::switch(paths, &slug));
+                let switched = ctx.run(move |paths| crate::commands::course::switch(paths, &slug));
+                // Refresh the marker now — navigation won't (same screen).
+                if switched.is_some() {
+                    self.active = Some(course.slug.clone());
+                }
                 true
             }
             KeyCode::Char('n') => {
@@ -124,26 +128,18 @@ impl Screen for Home {
     }
 }
 
-fn theme_selected() -> ratatui::style::Style {
-    ratatui::style::Style::new().fg(theme::OK)
-}
-
 #[cfg(all(test, feature = "tui"))]
 mod tests {
     use super::Home;
     use crate::commands;
-    use crate::core::store::Paths;
     use crate::tui::app::Ctx;
     use crate::tui::router::ScreenId;
     use crate::tui::screens::Screen;
-    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+    use crate::tui::testsupport::{buffer_text, key};
+    use crossterm::event::KeyCode;
     use ratatui::{backend::TestBackend, Terminal};
 
-    fn key(code: KeyCode) -> KeyEvent {
-        KeyEvent::new(code, KeyModifiers::NONE)
-    }
-
-    fn two_course_paths() -> (Paths, String, String) {
+    fn two_course_paths() -> (crate::core::store::Paths, String, String) {
         let (paths, first) = commands::testutil::setup();
         let spec = "title: Linear Algebra\ngoal: la intuition\n";
         let second = match commands::course::create(&paths, spec).expect("second course") {
@@ -165,7 +161,7 @@ mod tests {
     }
 
     #[test]
-    fn enter_switches_active_course() {
+    fn enter_switches_active_course_and_refreshes_marker() {
         let (paths, _first, second) = two_course_paths();
         let mut home = Home::default();
         home.reload(&paths).expect("reload");
@@ -178,6 +174,11 @@ mod tests {
             .map(|p| crate::core::config::load_from(&p).active_course)
             .unwrap_or_default();
         assert_eq!(active.as_deref(), Some(second.as_str()));
+        assert_eq!(
+            home.active.as_deref(),
+            Some(second.as_str()),
+            "marker must refresh on switch, not only on reload"
+        );
     }
 
     #[test]
@@ -216,16 +217,5 @@ mod tests {
         assert_eq!(home.selected, 1, "up from 0 wraps to last");
         home.handle_key(&mut Ctx::new(&paths, &mut actions), key(KeyCode::Down));
         assert_eq!(home.selected, 0, "down from last wraps to 0");
-    }
-
-    fn buffer_text(buffer: &ratatui::buffer::Buffer, width: u16, height: u16) -> String {
-        let mut text = String::new();
-        for y in 0..height {
-            for x in 0..width {
-                text.push_str(buffer[(x, y)].symbol());
-            }
-            text.push('\n');
-        }
-        text
     }
 }

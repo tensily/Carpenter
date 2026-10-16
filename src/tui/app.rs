@@ -23,13 +23,22 @@ pub struct Session {
     pub done: bool,
     notice: Option<Notice>,
     actions: u32,
-    visited: Vec<String>,
+    visited: Vec<ScreenId>,
 }
 
 /// A status-line message (`✓`/`✗` prefixed by severity).
 struct Notice {
     text: String,
     is_error: bool,
+}
+
+impl Notice {
+    fn new(text: impl Into<String>, is_error: bool) -> Self {
+        Self {
+            text: text.into(),
+            is_error,
+        }
+    }
 }
 
 /// What a screen may do to the session while handling a key.
@@ -50,33 +59,35 @@ impl<'a> Ctx<'a> {
         }
     }
 
-    /// Run one command fn: success → `✓ message` status line, failure →
-    /// `✗ error` (the envelope contract stays with `app::run`; in-app errors
-    /// are status lines, matching "never raise to the caller").
-    pub fn run(&mut self, action: impl FnOnce(&Paths) -> Result<Data, CarpenterError>) {
+    /// Run one command fn: success → `✓ message` status line + the payload
+    /// (so the caller can refresh derived state), failure → `✗ error`. The
+    /// envelope contract stays with `app::run`; in-app errors are status
+    /// lines, matching "never raise to the caller".
+    pub fn run(
+        &mut self,
+        action: impl FnOnce(&Paths) -> Result<Data, CarpenterError>,
+    ) -> Option<Data> {
         match action(self.paths) {
             Ok(data) => {
                 *self.actions += 1;
                 self.info(data.message());
+                Some(data)
             }
-            Err(e) => self.error(e.to_string()),
+            Err(e) => {
+                self.error(e.to_string());
+                None
+            }
         }
     }
 
     /// Set a neutral status-line message.
     pub fn info(&mut self, text: impl Into<String>) {
-        self.notice = Some(Notice {
-            text: text.into(),
-            is_error: false,
-        });
+        self.notice = Some(Notice::new(text, false));
     }
 
     /// Set an error status-line message.
     pub fn error(&mut self, text: impl Into<String>) {
-        self.notice = Some(Notice {
-            text: text.into(),
-            is_error: true,
-        });
+        self.notice = Some(Notice::new(text, true));
     }
 
     /// Navigate to another screen on this key.
@@ -100,7 +111,7 @@ impl Session {
             done: false,
             notice: None,
             actions: 0,
-            visited: vec![ScreenId::Home.name().to_string()],
+            visited: vec![ScreenId::Home],
         }
     }
 
@@ -116,19 +127,10 @@ impl Session {
 
     /// Feed one key press: screen first, then the global map.
     pub fn key(&mut self, key: KeyEvent, paths: &Paths) {
-        let (consumed, goto, notice) = {
-            let mut ctx = Ctx::new(paths, &mut self.actions);
-            let consumed = self.screens[self.current].handle_key(&mut ctx, key);
-            let Ctx {
-                paths: _,
-                notice,
-                goto,
-                actions: _,
-            } = ctx;
-            (consumed, goto, notice)
-        };
-        self.notice = notice;
-        if let Some(id) = goto {
+        let mut ctx = Ctx::new(paths, &mut self.actions);
+        let consumed = self.screens[self.current].handle_key(&mut ctx, key);
+        self.notice = ctx.notice;
+        if let Some(id) = ctx.goto {
             self.goto(id, paths);
         }
         if consumed {
@@ -152,9 +154,8 @@ impl Session {
         let Some(i) = self.screens.iter().position(|s| s.id() == id) else {
             return;
         };
-        let name = id.name();
-        if self.visited.last().map(String::as_str) != Some(name) {
-            self.visited.push(name.to_string());
+        if self.visited.last() != Some(&id) {
+            self.visited.push(id);
         }
         self.current = i;
         self.reload_current(paths);
@@ -162,17 +163,18 @@ impl Session {
 
     fn reload_current(&mut self, paths: &Paths) {
         if let Err(e) = self.screens[self.current].reload(paths) {
-            self.notice = Some(Notice {
-                text: e.to_string(),
-                is_error: true,
-            });
+            self.notice = Some(Notice::new(e.to_string(), true));
         }
     }
 
     /// The exit payload: screens visited (in order) + applied action count.
     pub fn exit(&self) -> Data {
         Data::TuiExit {
-            screens: self.visited.clone(),
+            screens: self
+                .visited
+                .iter()
+                .map(|id| id.name().to_string())
+                .collect(),
             actions: self.actions,
         }
     }
@@ -180,7 +182,6 @@ impl Session {
     /// Draw the session: header tabs, current screen, status line, keybar.
     pub fn draw(&mut self, frame: &mut ratatui::Frame) {
         use ratatui::layout::{Constraint, Layout};
-        use ratatui::style::{Modifier, Style};
         use ratatui::text::{Line, Span};
         use ratatui::widgets::Paragraph;
 
@@ -192,28 +193,22 @@ impl Session {
         ])
         .split(frame.area());
 
-        let mut header = vec![Span::styled(
-            "carpenter",
-            Style::new().fg(theme::ACCENT).add_modifier(Modifier::BOLD),
-        )];
+        let mut header = vec![Span::styled("carpenter", theme::brand())];
         for id in crate::tui::router::ALL {
-            let current = id == self.current_id();
-            let name = id.name();
-            header.push(Span::styled(format!(" {name} "), theme::tab(current)));
+            header.push(Span::styled(
+                format!(" {} ", id.name()),
+                theme::tab(id == self.current_id()),
+            ));
         }
         frame.render_widget(Paragraph::new(Line::from(header)), chunks[0]);
 
         self.screens[self.current].draw(frame, chunks[1]);
 
         let status = match &self.notice {
-            Some(n) if n.is_error => Line::from(Span::styled(
-                format!("✗ {}", n.text),
-                Style::new().fg(theme::ERR),
-            )),
-            Some(n) => Line::from(Span::styled(
-                format!("✓ {}", n.text),
-                Style::new().fg(theme::OK),
-            )),
+            Some(n) if n.is_error => {
+                Line::from(Span::styled(format!("✗ {}", n.text), theme::err_text()))
+            }
+            Some(n) => Line::from(Span::styled(format!("✓ {}", n.text), theme::marker())),
             None => Line::from(Span::raw("")),
         };
         frame.render_widget(Paragraph::new(status), chunks[2]);
@@ -227,11 +222,8 @@ mod tests {
     use crate::commands;
     use crate::models::Data;
     use crate::tui::router::ScreenId;
-    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
-
-    fn key(code: KeyCode) -> KeyEvent {
-        KeyEvent::new(code, KeyModifiers::NONE)
-    }
+    use crate::tui::testsupport::key;
+    use crossterm::event::KeyCode;
 
     #[test]
     fn right_cycles_screens_and_records_visits() {
@@ -244,7 +236,15 @@ mod tests {
         assert_eq!(session.current_id(), ScreenId::Review);
         session.key(key(KeyCode::Left), &paths);
         assert_eq!(session.current_id(), ScreenId::Intake);
-        assert_eq!(session.visited, vec!["home", "intake", "review", "intake"]);
+        assert_eq!(
+            session.visited,
+            vec![
+                ScreenId::Home,
+                ScreenId::Intake,
+                ScreenId::Review,
+                ScreenId::Intake,
+            ]
+        );
     }
 
     #[test]
