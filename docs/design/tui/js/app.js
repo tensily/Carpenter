@@ -9,9 +9,7 @@
 
   const SCREENS = ['home', 'intake', 'review', 'board', 'lesson', 'pivot'];
   const RENDERERS = {
-    home: renderHome,
     intake: renderIntake,
-    review: renderReview,
     board: renderBoard,
     lesson: renderLesson,
     pivot: renderPivot,
@@ -36,6 +34,10 @@
     if (className) node.className = className;
     if (text !== undefined && text !== null) node.textContent = text;
     return node;
+  }
+
+  function badge(variant, text) {
+    return el('span', 'c-badge c-badge--' + variant, text);
   }
 
   function setHash(screen) {
@@ -95,8 +97,8 @@
     switch (name) {
       case 'confirm-scaffold': return confirmScaffold();
       case 'lesson-execute': return updateLessonStatus('verified', 'executed: 7 ran · 0 errored');
-      case 'lesson-verify': return lessonStatusUpdate('verified');
-      case 'lesson-skip': return lessonStatusUpdate('skipped');
+      case 'lesson-verify': return updateLessonStatus('verified');
+      case 'lesson-skip': return updateLessonStatus('skipped');
       case 'add-note': return addNote();
       case 'confirm-pivot': return confirmPivot();
       case 'goal-add': return addGoal();
@@ -106,7 +108,7 @@
   }
 
   function confirmScaffold() {
-    const summary = el('div');
+    const summary = el('dl', 'c-kv');
     appendSpecRows(summary);
     openModal('Scaffold course?', summary, () => {
       const slug = (store.draftSpec && store.draftSpec.slug) || DEFAULT_COURSE_SLUG;
@@ -115,17 +117,12 @@
     });
   }
 
-  function lessonStatusUpdate(status) {
-    const lesson = currentLesson();
-    if (lesson) updateLessonStatus(status, status + ': ' + lesson.slug);
-  }
-
   function updateLessonStatus(status, message) {
     const lesson = currentLesson();
     if (!lesson) return;
     store.setLessonStatus(lesson.id, status);
-    toast(message, 'ok');
-    renderLesson();
+    toast(message || status + ': ' + lesson.slug, 'ok');
+    renderLessonActions(lesson);
     renderBoard();
   }
 
@@ -146,28 +143,24 @@
   }
 
   function confirmPivot() {
-    store.applyPivot({});
+    store.confirmPlan();
     toast('plan updated · confirmed', 'ok');
     setHash('board');
   }
 
   function addGoal() {
-    const goals = (store.plan && store.plan.goals) || [];
-    goals.push({ id: nextGoalId(goals), text: '', links: [] });
-    renderPivot();
+    const holder = document.getElementById('pivot-goals');
+    if (!holder || !store.plan) return;
+    const goal = { id: store.nextId('g', store.plan.goals), text: '', links: [] };
+    store.applyPivot({ goalsAdded: [goal] });
+    holder.append(goalInputRow(goal));
   }
 
   function removeGoal(button) {
     const row = button.closest('[data-goal-id]');
-    if (!row || !store.plan) return;
-    store.plan.goals = (store.plan.goals || []).filter((goal) => goal.id !== row.dataset.goalId);
-    renderPivot();
-  }
-
-  function nextGoalId(goals) {
-    let n = goals.length + 1;
-    while (goals.some((goal) => goal.id === 'g' + n)) n += 1;
-    return 'g' + n;
+    if (!row) return;
+    store.applyPivot({ goalsRemoved: [row.dataset.goalId] });
+    row.remove();
   }
 
   function modalEl() {
@@ -212,17 +205,20 @@
     if (!group) return null;
     const chip = group.querySelector('.c-chip--on');
     if (!chip) return null;
-    return (chip.dataset.kind || chip.textContent || '').trim().toLowerCase();
+    return (chip.textContent || '').trim().toLowerCase();
   }
 
   function toggleChip(chip) {
+    const on = !chip.classList.contains('c-chip--on');
     const group = chip.closest('.c-chips');
     if (group && SINGLE_SELECT_CHIP_GROUPS.has(group.id)) {
       group.querySelectorAll('.c-chip--on').forEach((other) => {
-        if (other !== chip) other.classList.remove('c-chip--on');
+        other.classList.remove('c-chip--on');
+        other.setAttribute('aria-pressed', 'false');
       });
     }
-    chip.classList.toggle('c-chip--on');
+    chip.classList.toggle('c-chip--on', on);
+    chip.setAttribute('aria-pressed', String(on));
   }
 
   function wizardSteps() {
@@ -243,13 +239,14 @@
     });
   }
 
-  function adjustWizardStep(nav) {
-    const screen = nav.closest('.c-screen');
+  function adjustWizardStep(trigger) {
+    const screen = trigger.closest('.c-screen');
     if (!screen || screen.dataset.screen !== 'intake') return;
-    const label = (nav.textContent || '').trim().toLowerCase();
+    const dir = trigger.dataset.step;
+    if (!dir) return;
     const last = Math.max(0, wizardSteps().length - 1);
-    if (label.includes('continue')) wizardStep = Math.min(wizardStep + 1, last);
-    else if (label.includes('back')) wizardStep = Math.max(wizardStep - 1, 0);
+    if (dir === 'next') wizardStep = Math.min(wizardStep + 1, last);
+    else if (dir === 'prev') wizardStep = Math.max(wizardStep - 1, 0);
     renderWizard();
   }
 
@@ -261,10 +258,10 @@
       });
     }
     row.classList.add('c-row--selected');
-    if (row.closest('#lesson-list')) {
+    if (row.dataset.select === 'lesson') {
       currentLessonId = row.dataset.lessonId || null;
       renderLesson();
-    } else if (row.closest('[data-screen="home"]')) {
+    } else if (row.dataset.select === 'course') {
       if (row.dataset.courseSlug) store.activeCourse = row.dataset.courseSlug;
       setHash('board');
     }
@@ -280,6 +277,7 @@
   function courseRow(course) {
     const row = el('div', 'c-row c-row--clickable');
     row.dataset.courseSlug = course.slug;
+    row.dataset.select = 'course';
     row.append(
       el('span', null, course.title),
       el('span', 'c-kbd', course.slug),
@@ -300,14 +298,8 @@
   function appendSpecRows(container) {
     const spec = store.draftSpec || {};
     SPEC_FIELDS.forEach(([key, label]) => {
-      if (spec[key]) container.append(kvRow(label, spec[key]));
+      if (spec[key]) container.append(el('dt', null, label), el('dd', null, spec[key]));
     });
-  }
-
-  function kvRow(label, value) {
-    const row = el('div', 'c-kv');
-    row.append(el('span', null, label), el('span', null, value));
-    return row;
   }
 
   function renderReview() {
@@ -327,27 +319,25 @@
   function renderPlanStatus() {
     const holder = document.getElementById('plan-status');
     if (!holder) return;
-    const badge = holder.querySelector('.c-badge') || holder;
     const status = (store.plan && store.plan.status) || 'draft';
-    badge.className = badge === holder ? 'c-badge c-badge--' + status : 'c-badge--' + status;
-    badge.textContent = status;
+    holder.className = 'c-badge c-badge--' + status;
+    holder.textContent = status;
   }
 
   function renderGoals() {
     const list = document.getElementById('goals-list');
     if (!list) return;
+    const byId = new Map((store.lessons || []).map((lesson) => [lesson.id, lesson]));
     list.replaceChildren();
-    ((store.plan && store.plan.goals) || []).forEach((goal) => list.append(goalRow(goal)));
+    ((store.plan && store.plan.goals) || []).forEach((goal) => list.append(goalRow(goal, byId)));
   }
 
-  function goalRow(goal) {
+  function goalRow(goal, byId) {
     const row = el('div', 'c-row');
-    row.append(el('span', null, goal.text));
+    row.append(el('span', null, goal.text), el('span', 'c-kbd', goal.id));
     (goal.links || []).forEach((lessonId) => {
-      const lesson = (store.lessons || []).find((entry) => entry.id === lessonId);
-      row.append(
-        el('span', lesson ? 'c-badge c-badge--' + lesson.status : 'c-badge', lesson ? lesson.slug : lessonId)
-      );
+      const lesson = byId.get(lessonId);
+      row.append(lesson ? badge(lesson.status, lesson.slug) : el('span', 'c-badge', lessonId));
     });
     return row;
   }
@@ -362,9 +352,10 @@
   function lessonRow(lesson) {
     const row = el('div', 'c-row c-row--clickable');
     row.dataset.lessonId = lesson.id;
+    row.dataset.select = 'lesson';
     row.classList.toggle('c-row--selected', lesson.id === currentLessonId);
     row.append(
-      el('span', 'c-badge c-badge--' + lesson.status, lesson.status),
+      badge(lesson.status, lesson.status),
       el('span', null, lesson.title),
       el('span', 'c-kbd', lesson.slug)
     );
@@ -389,10 +380,7 @@
       const pinned = lessons.find((lesson) => lesson.id === currentLessonId);
       if (pinned) return pinned;
     }
-    const seeded = lessons.find(
-      (lesson) => lesson.id === 'vectors-refresher' || lesson.slug === 'vectors-refresher'
-    );
-    return seeded || lessons.find((lesson) => lesson.status === 'created') || lessons[0] || null;
+    return lessons.find((lesson) => lesson.status === 'created') || lessons[0] || null;
   }
 
   function renderLesson() {
@@ -430,7 +418,7 @@
     }
     notes.forEach((note) => {
       const node = el('div', 'c-note');
-      node.append(el('span', 'c-badge c-badge--' + note.kind, note.kind), el('span', null, note.text));
+      node.append(badge(note.kind, note.kind), el('span', null, note.text));
       list.append(node);
     });
   }
@@ -438,10 +426,8 @@
   function renderPivot() {
     const holder = document.getElementById('pivot-goals');
     if (!holder) return;
-    const add = holder.querySelector('[data-action="goal-add"]');
     holder.replaceChildren();
     ((store.plan && store.plan.goals) || []).forEach((goal) => holder.append(goalInputRow(goal)));
-    if (add) holder.append(add);
   }
 
   function goalInputRow(goal) {
@@ -489,6 +475,8 @@
     document.addEventListener('input', onDocumentInput);
     document.addEventListener('keydown', onDocumentKeydown);
     window.addEventListener('hashchange', route);
+    renderHome();
+    renderReview();
     if (!location.hash) location.hash = '#/home';
     route();
   }

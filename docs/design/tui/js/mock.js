@@ -97,16 +97,19 @@ const store = {
   log: [],
 
   addNote({ lessonId, kind, text }) {
-    // Deterministic ids: next numeric suffix after the highest existing nN.
-    let maxSeq = 0;
-    for (const note of store.notes) {
-      const match = /^n(\d+)$/.exec(note.id);
-      if (match) maxSeq = Math.max(maxSeq, Number(match[1]));
-    }
-    const note = { id: `n${maxSeq + 1}`, lessonId, kind, text, at: new Date().toISOString() };
+    const note = { id: store.nextId('n', store.notes), lessonId, kind, text, at: new Date().toISOString() };
     store.notes.push(note);
     store.log.push({ cmd: `notes add --kind ${kind} ${lessonId}`, ok: true });
     return note;
+  },
+
+  nextId(prefix, items) {
+    let maxSeq = 0;
+    for (const item of items) {
+      const match = new RegExp(`^${prefix}(\\d+)$`).exec(item.id);
+      if (match) maxSeq = Math.max(maxSeq, Number(match[1]));
+    }
+    return prefix + (maxSeq + 1);
   },
 
   setLessonStatus(id, status) {

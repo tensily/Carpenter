@@ -75,40 +75,9 @@ Global chrome on every screen: header, keybar, `#toast`, `#modal`
 
 ## Component inventory
 
-Every component in `css/components.css` must exist with all listed states.
-
-Layout classes (`css/layout.css`):
-
-| class | role | states |
-|---|---|---|
-| `.c-frame` | body-level grid: header/main/footer rows | — |
-| `.c-header` | top bar | — |
-| `.c-main` | screen container | — |
-| `.c-keybar` | footer keyboard-hint bar | — |
-| `.c-screen` | one per screen | hidden via `[hidden] { display:none }` |
-
-Components (`css/components.css`):
-
-| class | structure | states / variants |
-|---|---|---|
-| `c-panel` | `__head`, `__title`, `__body` | — |
-| `c-btn` | button | `--primary` `--ghost` `--danger`; `:hover` `:focus-visible` `[disabled]` |
-| `c-kbd` | keyboard hint | — |
-| `c-field` | label + control wrapper | — |
-| `c-input` | single-line input | — |
-| `c-textarea` | multi-line input | — |
-| `c-chips` > `c-chip` | chip group | `c-chip--on` |
-| `c-stepper` > `c-step` | wizard steps | `c-step--active` `c-step--done` |
-| `c-list` > `c-row` | selectable rows | `c-row--selected` `c-row--clickable`; `:hover` `:focus-visible` |
-| `c-badge` | status/kind pill | `--planned` `--created` `--verified` `--skipped` `--draft` `--confirmed` `--gap` `--mistake` `--strength` `--pattern` `--progress` |
-| `c-progress` | bar (`__fill`) | — |
-| `c-empty` | empty state | — |
-| `c-note` | feedback note | — |
-| `c-diff-row` | pivot diff line | `--add` `--del` `--mod` |
-| `c-modal` | overlay shown via `[open]`; inner `.c-modal__box` | `[open]` |
-| `c-toast` | transient message | `--ok` `--err` |
-| `c-actions` | button row | — |
-| `c-kv` | key/value spec-preview rows | — |
+The single listing of classes and states lives in the Contract section below
+(tokens, layout classes, component classes). Every component there must exist in
+`css/components.css` with all listed states.
 
 ## Contract
 
@@ -134,14 +103,14 @@ c-panel (+ __head, __title, __body); c-btn (+ --primary --ghost --danger; :hover
 DOM contract (index.html):
 - body.c-frame; header.c-header; main.c-main; footer.c-keybar with c-kbd hints.
 - Six sections: <section class="c-screen" data-screen="home|intake|review|board|lesson|pivot">.
-- Hash routes #/home #/intake #/review #/board #/lesson #/pivot (default #/home). Nav triggers carry data-nav="<screen>".
+- Hash routes #/home #/intake #/review #/board #/lesson #/pivot (default #/home). Nav triggers carry data-nav="<screen>", actions data-action="<name>", wizard movement data-step="prev|next"; selectable rows carry data-select="course|lesson".
 - Element ids app.js binds (exact): #toast #modal #modal-title #modal-body #modal-confirm #f-outcome #f-background #f-time #f-pace #f-depth #spec-preview #plan-status #goals-list #lesson-list #progress-rollup #lesson-title #lesson-actions #notes-list #note-kind #note-text #pivot-diff #pivot-goals
 - index.html includes, in order: css/tokens.css, css/layout.css, css/components.css, then <script src="js/mock.js" defer></script>, <script src="js/app.js" defer></script>.
 - Each screen ships realistic pre-rendered static markup so the wireframe reads before JS enhances it.
 
 Store contract (js/mock.js): assigns const store and window.store; no top-level document access (so `node -e "window={};require('./js/mock.js')"` works).
 Shape: { courses: [{slug,title,path,lessonCount,progressPct}], activeCourse, plan: {status:'draft'|'confirmed', goals:[{id,text,links:[lessonId]}]}, lessons: [{id,slug,title,status:'planned'|'created'|'verified'|'skipped'}], notes: [{id,lessonId,kind,text,at}], draftSpec: {title,slug,goal,description}, log: [{cmd,ok}] }
-Methods (mutate, append to log, return affected value): addNote({lessonId,kind,text}), setLessonStatus(id,status), confirmPlan(), applyPivot({goalEdits,goalsAdded,goalsRemoved,relinks,lessonsAdded,lessonsRemoved}).
+Methods (mutate, append to log, return affected value): addNote({lessonId,kind,text}), setLessonStatus(id,status), confirmPlan(), applyPivot({goalEdits,goalsAdded,goalsRemoved,relinks,lessonsAdded,lessonsRemoved}); nextId(prefix, items) is pure — next free `prefix<N>` id.
 Seed: courses linalg-for-ml (active, 9 lessons, 22%) + python-foundations (80%); plan confirmed with 4 goals — g1 vectors/matrices links [vectors-refresher, matrices-refresher]; g2 systems/LU links [systems-and-elimination, lu-decomposition]; g3 eigen/SVD links [determinants-and-eigenvectors, svd]; g4 ML applications links [ml-linear-regression, ml-pca, ml-neural-network]; lessons vectors-refresher (verified), matrices-refresher (created), systems-and-elimination (created), lu-decomposition / determinants-and-eigenvectors / svd / ml-linear-regression / ml-pca / ml-neural-network (planned); 2–3 notes across kinds; draftSpec {title "Computational Linear Algebra for ML", slug linalg-for-ml, goal "Build ML-ready linear-algebra intuition from vectors to SVD", description "Vectors, matrices, systems, decompositions, and ML applications."}.
 ```
 
