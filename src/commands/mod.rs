@@ -27,4 +27,4 @@ pub mod upgrade;
 pub mod venv;
 
 #[cfg(test)]
-mod testutil;
+pub(crate) mod testutil;

@@ -646,6 +646,15 @@ pub enum Data {
         /// the removed path.
         path: String,
     },
+    // ---- tui (adr/028; cfg-gated — never in a release binary) ----
+    /// (tui) `carpenter tui` — session summary on exit.
+    #[cfg(feature = "tui")]
+    TuiExit {
+        /// screens visited, in navigation order (first is `home`).
+        screens: Vec<String>,
+        /// command-fn actions applied successfully through the UI.
+        actions: u32,
+    },
 }
 
 impl Data {
@@ -743,6 +752,8 @@ impl Data {
                     format!("dev sandbox already absent: {path}")
                 }
             }
+            #[cfg(feature = "tui")]
+            Self::TuiExit { .. } => String::from("tui session ended"),
         }
     }
 }

@@ -8,7 +8,10 @@ license = "BSD-3-Clause"
 [features]
 # Relaxes the doc/example/scenario gates (adr/016) for the authoring loop.
 # Never enabled in release/CI builds; never a default feature.
-dev = []
+dev = ["tui"]
+# The interactive terminal UI (adr/028): optional deps so a release build
+# never compiles ratatui/crossterm until the TUI ships its gate-flip PR.
+tui = ["dep:ratatui", "dep:crossterm"]
 
 [dependencies]
 clap = { version = "4", features = ["derive"] }
@@ -20,6 +23,8 @@ rusqlite = { version = "0.31", features = ["bundled"] }
 unicode-normalization = "0.1"
 serde_yml = "0.0.13"
 fs4 = "0.12"
+ratatui = { version = "0.29", optional = true, default-features = false, features = ["crossterm"] }
+crossterm = { version = "0.28", optional = true }
 
 [dev-dependencies]
 # libc: killpg for the scenario runner's per-script timeout (tests/scenarios.rs).

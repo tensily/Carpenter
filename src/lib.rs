@@ -15,3 +15,5 @@ pub mod commands;
 pub mod core;
 pub mod manual;
 pub mod models;
+#[cfg(feature = "tui")]
+pub mod tui;

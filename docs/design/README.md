@@ -22,6 +22,7 @@ material. SQLite is the source of truth; notebooks render from it. Read in order
 | 17 | [cross-platform.md](17-cross-platform.md) | Linux/macOS paths, `dirs`-only platform surface, CI matrix |
 | 18 | [scenarios.md](18-scenarios.md) | multi-command scenario examples (gated, howto+skill-inlined) |
 | 19 | [dev-build.md](19-dev-build.md) | dev build stage, `--capture-example`, + the `dev` command group (check/setup/clean/register/upgrade) (adr/016) |
+| 20 | [tui.md](20-tui.md) | terminal UI: screens, key map, `Screen` contract, rollout (adr/028) |
 
 Numbering gaps are merged docs (one concern per file otherwise): **02 stack** →
 [03 → Stack](03-architecture.md#stack); **13 out-of-scope** →

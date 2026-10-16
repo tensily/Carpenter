@@ -68,9 +68,13 @@ jobs:
         run: shellcheck scripts/install.sh
       - name: clippy
         run: cargo clippy --workspace --all-targets -- -D warnings
+      - name: clippy (tui feature, adr/028)
+        run: cargo clippy --workspace --all-targets --features tui -- -D warnings
       - name: build (strict gates + doc regen)
         run: cargo xtask build
       - name: test
         run: cargo test --workspace
+      - name: test (tui feature, adr/028)
+        run: cargo test --workspace --features tui
       - name: doc
         run: RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --workspace

@@ -31,3 +31,4 @@ sequence are retired decisions (not listed). Read topically; start with the inde
 | 025 | [025-standard-release-flow.md](025-standard-release-flow.md) | standard human-bump flow: CI commits nothing to the trunks, holds no credentials; ladder retired |
 | 026 | [026-prune-merged-branches.md](026-prune-merged-branches.md) | `prune` job deletes branches merged into nightly (PR-based, GITHUB_TOKEN) when a promotion lands |
 | 027 | [027-install-identity-from-binary-stem.md](027-install-identity-from-binary-stem.md) | install identity = binary stem: branch-tagged installs isolate binary, data dir, and skill (`scripts/install-branch.sh`) |
+| 028 | [028-terminal-ui.md](028-terminal-ui.md) | terminal UI: ratatui `carpenter tui` behind the `tui` feature, dev-first rollout, stderr rendering, in-process command reuse |

@@ -53,6 +53,13 @@ pub fn cli() -> Command {
                 .arg(positional("path", "Target directory.")),
         )
         .subcommand(self_group());
+    // `carpenter tui` (adr/028) exists only under the `tui` feature (enabled
+    // by `dev`) — invisible to a release `--help` scrape, the howto, and the
+    // inlined SKILL.md, like the `dev` group above.
+    #[cfg(feature = "tui")]
+    let cmd = cmd.subcommand(
+        Command::new("tui").about("Interactive course-builder terminal UI (experimental)."),
+    );
     // `--capture-example <PATH>` exists only in a `--features dev` build
     // (adr/016). gen-howto runs against a non-dev build of carpenter, so this
     // arg — and thus the whole dev authoring surface — is invisible to the
@@ -718,6 +725,8 @@ fn dispatch(paths: &Paths, matches: &ArgMatches) -> Result<Data, core::error::Ca
         Some(("config", sub)) => config_cmd(paths, sub),
         Some(("build", m)) => commands::build::build(paths, &arg_string(m, "path")),
         Some(("self", sub)) => self_cmd(paths, sub),
+        #[cfg(feature = "tui")]
+        Some(("tui", _)) => crate::tui::run(paths),
         #[cfg(feature = "dev")]
         Some(("dev", sub)) => dev_cmd(sub),
         _ => Err(core::error::CarpenterError::ValidationError(
@@ -1178,4 +1187,14 @@ fn dev_group_present_in_dev_build() {
             "missing dev {expected}: {leaves:?}"
         );
     }
+}
+
+/// (tui only) the `tui` subcommand exists when the feature is compiled
+/// (absent in release — the howto scrape must never see it, adr/028).
+#[cfg(all(test, feature = "tui"))]
+#[test]
+fn tui_subcommand_present_when_compiled() {
+    let tree = cli();
+    let names: Vec<&str> = tree.get_subcommands().map(|c| c.get_name()).collect();
+    assert!(names.contains(&"tui"), "missing tui: {names:?}");
 }
