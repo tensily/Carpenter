@@ -38,7 +38,7 @@
               <code>python-foundations</code>
               <span>Python Foundations</span>
               <span class="c-progress"><span class="c-progress__fill" style="width:80%"></span></span>
-              <span>8/10 lessons</span>
+              <span>4/5 lessons</span>
             </button>
           </div>
           <div class="c-actions">
@@ -131,7 +131,7 @@
       <div class="c-panel">
         <div class="c-panel__head">
           <h1 class="c-panel__title">Computational Linear Algebra for ML</h1>
-          <span class="c-badge c-badge--confirmed" id="plan-status">plan confirmed</span>
+          <span class="c-badge c-badge--confirmed" id="plan-status">confirmed</span>
         </div>
         <div class="c-panel__body">
           <p>Vectors, matrices, systems, decompositions, and ML applications.</p>
@@ -144,25 +144,25 @@
         <div class="c-panel__body">
           <div class="c-list" id="goals-list">
             <div class="c-row">
-              <span>Rebuild vector and matrix intuition in NumPy</span>
+              <span>Represent vectors and matrices in NumPy and compute products.</span>
               <code>g1</code>
               <span class="c-badge c-badge--verified">vectors-refresher</span>
               <span class="c-badge c-badge--created">matrices-refresher</span>
             </div>
             <div class="c-row">
-              <span>Solve linear systems and understand LU decomposition</span>
+              <span>Solve linear systems via elimination and LU.</span>
               <code>g2</code>
               <span class="c-badge c-badge--created">systems-and-elimination</span>
               <span class="c-badge c-badge--planned">lu-decomposition</span>
             </div>
             <div class="c-row">
-              <span>Build geometric intuition for eigenvalues and the SVD</span>
+              <span>Apply eigenvalues, eigenvectors, and the SVD.</span>
               <code>g3</code>
               <span class="c-badge c-badge--planned">determinants-and-eigenvectors</span>
               <span class="c-badge c-badge--planned">svd</span>
             </div>
             <div class="c-row">
-              <span>Apply decompositions to core ML workflows</span>
+              <span>Apply linear algebra to ML: regression, PCA, nets, classification.</span>
               <code>g4</code>
               <span class="c-badge c-badge--planned">ml-linear-regression</span>
               <span class="c-badge c-badge--planned">ml-pca</span>
@@ -231,7 +231,7 @@
         </div>
         <div class="c-panel__body">
           <div class="c-progress"><div class="c-progress__fill" style="width:22%"></div></div>
-          <p>2/9 lessons · 2 created · 1 verified · 0 skipped</p>
+          <p>22% · 3/9 lessons · 2 created · 1 verified · 0 skipped</p>
         </div>
       </div>
       <div class="c-actions">
@@ -299,7 +299,7 @@
             <div class="c-row">
               <div class="c-field">
                 <label for="goal-g1">g1</label>
-                <input class="c-input" id="goal-g1" type="text" value="Rebuild vector and matrix intuition in NumPy">
+                <input class="c-input" id="goal-g1" type="text" value="Represent vectors and matrices in NumPy and compute products.">
               </div>
               <p><code>vectors-refresher · matrices-refresher</code></p>
               <button type="button" class="c-btn c-btn--ghost" data-action="goal-remove">Remove</button>
@@ -307,7 +307,7 @@
             <div class="c-row">
               <div class="c-field">
                 <label for="goal-g2">g2</label>
-                <input class="c-input" id="goal-g2" type="text" value="Solve linear systems and understand LU decomposition">
+                <input class="c-input" id="goal-g2" type="text" value="Solve linear systems via elimination and LU.">
               </div>
               <p><code>systems-and-elimination · lu-decomposition</code></p>
               <button type="button" class="c-btn c-btn--ghost" data-action="goal-remove">Remove</button>
@@ -315,7 +315,7 @@
             <div class="c-row">
               <div class="c-field">
                 <label for="goal-g3">g3</label>
-                <input class="c-input" id="goal-g3" type="text" value="Build geometric intuition for eigenvalues and the SVD">
+                <input class="c-input" id="goal-g3" type="text" value="Apply eigenvalues, eigenvectors, and the SVD.">
               </div>
               <p><code>determinants-and-eigenvectors · svd</code></p>
               <button type="button" class="c-btn c-btn--ghost" data-action="goal-remove">Remove</button>
@@ -323,7 +323,7 @@
             <div class="c-row">
               <div class="c-field">
                 <label for="goal-g4">g4</label>
-                <input class="c-input" id="goal-g4" type="text" value="Apply decompositions to core ML workflows">
+                <input class="c-input" id="goal-g4" type="text" value="Apply linear algebra to ML: regression, PCA, nets, classification.">
               </div>
               <p><code>ml-linear-regression · ml-pca · ml-neural-network</code></p>
               <button type="button" class="c-btn c-btn--ghost" data-action="goal-remove">Remove</button>
@@ -360,7 +360,7 @@
     <span><kbd class="c-kbd">p</kbd> pivot</span>
   </footer>
 
-  <div class="c-modal" id="modal" hidden role="dialog" aria-modal="true" aria-labelledby="modal-title">
+  <div class="c-modal" id="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
     <div class="c-modal__box">
       <h2 class="c-panel__title" id="modal-title"></h2>
       <div id="modal-body"></div>

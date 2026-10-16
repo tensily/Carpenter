@@ -28,6 +28,8 @@
   let wizardStep = 0;
   let modalOnConfirm = null;
   let toastTimer = null;
+  let screenEls = [];
+  let navEls = [];
 
   function el(tag, className, text) {
     const node = document.createElement(tag);
@@ -51,12 +53,12 @@
 
   function route() {
     const screen = screenFromHash();
-    document.querySelectorAll('.c-screen').forEach((section) => {
-      section.classList.toggle('hidden', section.dataset.screen !== screen);
+    screenEls.forEach((section) => {
+      section.hidden = section.dataset.screen !== screen;
     });
     const render = RENDERERS[screen];
     if (render) render();
-    document.querySelectorAll('[data-nav]').forEach((nav) => {
+    navEls.forEach((nav) => {
       if (nav.dataset.nav === screen) nav.setAttribute('aria-current', 'page');
       else nav.removeAttribute('aria-current');
     });
@@ -175,18 +177,18 @@
     if (titleEl) titleEl.textContent = title;
     if (bodyEl) bodyEl.replaceChildren(bodyNode);
     modalOnConfirm = onConfirm || null;
-    modal.classList.remove('hidden');
+    modal.setAttribute('open', '');
   }
 
   function closeModal() {
     const modal = modalEl();
-    if (modal) modal.classList.add('hidden');
+    if (modal) modal.removeAttribute('open');
     modalOnConfirm = null;
   }
 
   function modalIsOpen() {
     const modal = modalEl();
-    return Boolean(modal) && !modal.classList.contains('hidden');
+    return Boolean(modal) && modal.hasAttribute('open');
   }
 
   function toast(text, kind) {
@@ -195,9 +197,9 @@
     node.textContent = text;
     node.classList.remove('c-toast--ok', 'c-toast--err');
     node.classList.add(kind === 'err' ? 'c-toast--err' : 'c-toast--ok');
-    node.classList.remove('hidden');
+    node.hidden = false;
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => node.classList.add('hidden'), TOAST_MS);
+    toastTimer = setTimeout(() => { node.hidden = true; }, TOAST_MS);
   }
 
   function selectedChipValue(groupId) {
@@ -365,13 +367,19 @@
   function renderProgress() {
     const rollup = document.getElementById('progress-rollup');
     if (!rollup) return;
+    const fill = rollup.querySelector('.c-progress__fill');
+    const summary = rollup.querySelector('p');
+    const course = (store.courses || []).find((entry) => entry.slug === store.activeCourse);
+    const pct = (course && course.progressPct) || 0;
     const lessons = store.lessons || [];
+    const created = lessons.filter((lesson) => lesson.status === 'created').length;
     const verified = lessons.filter((lesson) => lesson.status === 'verified').length;
-    const pct = lessons.length ? Math.round((100 * verified) / lessons.length) : 0;
-    rollup.replaceChildren(
-      progressNode(pct),
-      el('div', null, pct + '% · ' + verified + '/' + lessons.length + ' lessons verified')
-    );
+    const skipped = lessons.filter((lesson) => lesson.status === 'skipped').length;
+    if (fill) fill.style.width = pct + '%';
+    if (summary) {
+      summary.textContent = pct + '% · ' + (created + verified) + '/' + lessons.length + ' lessons · '
+        + created + ' created · ' + verified + ' verified · ' + skipped + ' skipped';
+    }
   }
 
   function currentLesson() {
@@ -471,6 +479,8 @@
   }
 
   function start() {
+    screenEls = Array.from(document.querySelectorAll('.c-screen'));
+    navEls = Array.from(document.querySelectorAll('[data-nav]'));
     document.addEventListener('click', onDocumentClick);
     document.addEventListener('input', onDocumentInput);
     document.addEventListener('keydown', onDocumentKeydown);
