@@ -83,7 +83,6 @@ dependencies = [
  "clap",
  "dirs",
  "fs4",
- "libc",
  "rusqlite",
  "serde",
  "serde_json",

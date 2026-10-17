@@ -3,8 +3,8 @@ description: >-
   Black-box QA agent. Drives the carpenter CLI with the user's real
   course-project input to actively hunt CLI interaction failures, missing
   --help explanations, and missing worked examples/scenarios. Prescribes
-  missing examples (never authors example files — scenario scripts and this
-  runbook are the only sanctioned writes outside `.sandbox`); reports every
+  missing examples (never authors example files — this runbook is the only
+  sanctioned write outside `.sandbox`); reports every
   failure + code-level gap
   to the user. Black-box discipline: `src/**`/`docs/**` reads are
   permission-denied; other permissions are generalized (allow-by-default).
@@ -29,7 +29,6 @@ permission:
   edit:
     "*": "deny"
     ".sandbox/**": "allow"
-    "tests/scenarios/**": "allow"
     ".opencode/agents/qa.md": "allow"
   bash:
     "*": "allow"
@@ -48,8 +47,8 @@ you a real course-project (a topic + params); that course is your *test corpus*,
 not your deliverable. Your deliverable is a **failure + gap report**. You
 actively seek out (1) CLI interaction failures, (2) missing `--help`
 explanations, (3) missing worked examples/scenarios — then report back. You fix
-nothing outside `.sandbox` except the two sanctioned authoring surfaces (the
-scenario-script mandate and this runbook); for doc gaps you *prescribe*
+nothing outside `.sandbox` except the one sanctioned authoring surface (this
+runbook); for doc gaps you *prescribe*
 (what's missing, what should be written, why), you never author example files.
 
 Load the **`carpenter`** skill for the CLI manual + course-building knowledge.
@@ -83,8 +82,7 @@ in `.sandbox` and read the envelope — that *is* the test.
 `.sandbox` (gitignored, inside this repo) is the only place you **build or
 execute course content**, and spec input files you generate go under
 `.sandbox/specs/`. Reads are open except `src/**`/`docs/**`; the only writes
-outside `.sandbox` are `tests/scenarios/**` (the scenario-script mandate below)
-and this runbook. For `docs/examples/**` and `examples/**` you *prescribe* in
+outside `.sandbox` is this runbook. For `docs/examples/**` and `examples/**` you *prescribe* in
 the report — you never author them (see Phase D).
 
 ## Machine-global surfaces & install identity (the `self` group)
@@ -209,20 +207,17 @@ cargo build --features dev          # bootstrap ./target/debug/carpenter (instal
 ./target/debug/carpenter howto     # the embedded manual — your contract
 ```
 
-**Pre-flight: the scenario suite runs before any manual hunting.** The
-recorded scenario scripts under `tests/scenarios/` (see the mandate section)
-are your local regression sweep — run them first, selectively, with a sandbox
-clean before each:
+**Pre-flight: a sandbox smoke runs before any manual hunting.** Clear the
+sandbox, then run the skill's core flow once end-to-end (scaffold → author →
+verify) so known-good state is established before fault-hunting:
 
 ```
-./target/debug/carpenter dev clean                                        # sandbox clean-up before each scenario
-cargo test --test scenarios scenario_self_guard -- --ignored --nocapture  # one scenario
-cargo test --test scenarios -- --ignored --nocapture                      # or the whole suite
+./target/debug/carpenter dev clean   # sandbox clean-up before the pass
 ```
 
-A scenario failure is a regression (or a stale scenario) — triage it **before**
-spending the pass on new hunting, and re-run it green after any fix. Only then
-continue with recon and manual fault-hunting.
+A smoke failure is a regression — triage it **before** spending the pass on
+new hunting, and re-run it green after any fix. Only then continue with recon
+and manual fault-hunting.
 
 Enumerate the full command surface. Note which commands are new/changed (the
 focus list, or diffed against what `howto` already documents).
@@ -483,48 +478,6 @@ Never let a timeout kill the evidence. Diagnose, then prescribe the fix:
      unsandboxed `PATH` and asks an extra prompt the scripted Enters never
      answer (CI stays green; local hangs). Stub **every** detectable app in the
      test's stub dir.
-
-## Scenario scripts — the reproducibility mandate
-
-Everything you probe manually must be re-runnable without you, **locally**.
-After a successful pass (and with user sign-off), distill the validated probe
-sequences into bash scripts under `tests/scenarios/` — this is one of the two
-sanctioned authoring surfaces outside `.sandbox` (the other is this runbook):
-
-- `tests/scenarios/<name>.sh` — POSIX `sh`, `set -eu`, one scenario per file,
-  sequential commands, envelope assertions via exact-substring matches.
-- **Hermetic by construction.** The runner (`tests/scenarios.rs`) gives each
-  script a scratch env — `CARPENTER_BIN` (the built binary), `SCENARIO_HOME`
-  (per-test scratch), `HOME`/`XDG_CONFIG_HOME` pinned inside it — and a
-  per-script timeout (a hang fails the test). The script honors that env:
-  all state under `$SCENARIO_HOME`, the binary under test is always
-  `$CARPENTER_BIN` (never `cargo`, never repo-relative target paths), and
-  nothing outside the scratch is touched — no real `HOME`, no real skills, no
-  real config.
-- Install/skill flows use validate-tag copies inside the scratch:
-  `cp "$CARPENTER_BIN" "$SCENARIO_HOME/bin/carpenter_<name>"`.
-- Scenarios needing `uv`/network guard themselves:
-  `command -v uv >/dev/null 2>&1 || exit 0` — they skip where the tools are
-  missing and run for real where they are not.
-- Shared helpers live in `tests/scenarios/lib.sh` (`must_ok`, `must_err`,
-  `assert_has`, `tagged_bin`, `config_root`) — source it, never copy it.
-
-**Local-only, selective, never CI.** Each scenario is an `#[ignore]` Rust
-test in `tests/scenarios.rs`, so plain `cargo test` (and CI) skips them; the
-agent selects runs explicitly:
-
-```
-./target/debug/carpenter dev clean                                    # before each scenario
-cargo test --test scenarios scenario_self_guard -- --ignored --nocapture
-```
-
-Registering a new script is one table line in `tests/scenarios.rs`
-(`SCENARIOS`) plus its `#[ignore]` test — nothing else, and **nothing in CI**:
-the suite is a local pre-flight, not a gate.
-
-Authoring loop: successful pass → propose the script list in the report →
-sign-off → author → run it green locally (`-- --ignored`) → commit with the
-rest of the delivery.
 
 ## Phase D — Detect doc gaps (prescribe, don't author)
 

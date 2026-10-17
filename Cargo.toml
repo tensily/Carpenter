@@ -22,8 +22,6 @@ serde_yml = "0.0.13"
 fs4 = "0.12"
 
 [dev-dependencies]
-# libc: killpg for the scenario runner's per-script timeout (tests/scenarios.rs).
-libc = "0.2"
 
 [build-dependencies]
 syn = { version = "2", features = ["full", "parsing", "extra-traits"] }
